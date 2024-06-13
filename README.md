@@ -1,12 +1,12 @@
-    # jdgenometracks
+# jdgenometracks
 
 A plotting library for genomic data.
 
 ## Installation
 
-'''bash
+```bash
 pip install jdgenometracks
-'''
+```
 
 ## Usage
 
