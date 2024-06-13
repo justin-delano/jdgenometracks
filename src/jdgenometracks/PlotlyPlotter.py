@@ -1,7 +1,7 @@
 from __future__ import annotations
-
 from dataclasses import dataclass
 
+import numpy as np
 import numpy.typing as npt
 import plotly.graph_objects as go
 import plotly.subplots as ps
@@ -13,8 +13,11 @@ from .utils import _get_col_limits, _get_height_props
 
 @dataclass
 class PlotlyPlotter:
-    tracks: npt.NDArray[GenomeTrack]  # type: ignore
+    tracks: npt.ArrayLike[GenomeTrack]
     total_height: float
+
+    def __post_init__(self):
+        self.tracks = np.array(self.tracks) if not isinstance(self.tracks, np.ndarray) else self.tracks
 
     def _plot_single_track(
         self, subplots: go.Figure, track: GenomeTrack, row: int, col: int, **kwargs
@@ -50,15 +53,15 @@ class PlotlyPlotter:
         Returns:
             go.Figure: Complete plotly figure
         """
+        if self.tracks.ndim == 1:
+            self.tracks = self.tracks.reshape(-1, 1)
+
         if column_regions is None:
             column_regions = [None for _ in range(self.tracks.shape[1])]
 
         num_distinct_rows = sum(
             [not track.share_with_previous for track in self.tracks[:, 0]]
         )
-
-        if self.tracks.ndim == 1:
-            self.tracks = self.tracks.reshape(-1, 1)
 
         height_props = height_props or _get_height_props(self.tracks)
         row_titles = row_titles or [""] * num_distinct_rows

@@ -136,6 +136,7 @@ class XAxisTrack(GenomeTrack):
                 title_text=f"{kwargs['chromosome']}",
                 linecolor="black",
                 showticklabels=True,
+                tickangle=0,
                 row=row,
                 col=col,
             )
@@ -144,6 +145,7 @@ class XAxisTrack(GenomeTrack):
                 title_text="",
                 linecolor="black",
                 showticklabels=True,
+                tickangle=0,
                 row=row,
                 col=col,
             )

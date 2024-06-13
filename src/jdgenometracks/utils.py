@@ -6,7 +6,7 @@ from .tracks.BedGraphTrack import BedGraphTrack
 from .tracks.BedTrack import BedTrack
 from .tracks.GenomeTrack import GenomeTrack
 from .tracks.HelperTracks import SpacerTrack, XAxisTrack
-
+import numpy.typing as npt
 
 def construct_track(file_path: str, **kwargs) -> GenomeTrack:
     """_summary_
@@ -73,7 +73,7 @@ def construct_track(file_path: str, **kwargs) -> GenomeTrack:
         raise NotImplementedError("Track type not yet supported")
 
 
-def _get_height_props(tracks) -> list[float]:
+def _get_height_props(tracks: npt.ArrayLike[GenomeTrack]) -> list[float]:
     new_heights = []
     for track in tracks:
         if track.share_with_previous:
@@ -86,7 +86,7 @@ def _get_height_props(tracks) -> list[float]:
     return new_heights
 
 
-def _get_xlim_bedlim(tracks, column_region: str | None) -> tuple[int, int, int]:
+def _get_xlim_bedlim(tracks:npt.ArrayLike[GenomeTrack], column_region: str | None) -> tuple[int, int, int]:
     max_bed_regions = 0
     for idx, track in enumerate(tracks):
         if track.data is None or track.data.empty:
@@ -110,7 +110,7 @@ def _get_xlim_bedlim(tracks, column_region: str | None) -> tuple[int, int, int]:
 
 
 def _get_col_limits(
-    tracks_col, column_region: str | None, relative_x_axis: bool
+    tracks_col:npt.ArrayLike[GenomeTrack], column_region: str | None, relative_x_axis: bool
 ) -> tuple[int, int, dict]:
     extra_options = {}
     if column_region is not None:

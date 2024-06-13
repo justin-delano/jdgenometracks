@@ -1,10 +1,12 @@
-# jdgenometracks
+    # jdgenometracks
 
 A plotting library for genomic data.
 
 ## Installation
 
-''' pip install jdgenometracks '''
+'''bash
+pip install jdgenometracks
+'''
 
 ## Usage
 
@@ -12,16 +14,15 @@ Initialize track options:
 
 ```python
 track_options = {
-"/path/to/data.bed": {
-    "track_name": "BedData",
-    "main_color": "red",
-    "plot_type": "points",
-},
-"/path/to/data.bedgraph": {
-    "track_name": "BedGraphData",
-    "main_color": "blue",
-    "plot_type": "lines",
-},
+    "/path/to/data.bed": {
+        "track_name": "BedData",
+        "main_color": "red",
+    },
+    "/path/to/data.bedgraph": {
+        "track_name": "BedGraphData",
+        "main_color": "blue",
+        "plot_type": "lines",
+    },
 }
 ```
 (Possible options found within tracks/{filetype}Track.py)
