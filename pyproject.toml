@@ -4,7 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "jdgenometracks"
+description = "A Python package for plotting genomic data."
+readme = "README.md"
 version = "0.1"
 dependencies = ["pandas", "numpy", "matplotlib", "plotly"]
 requires-python = ">=3.8"
 authors = [{ name = "Justin Delano", email = "jdelano@g.harvard.edu" }]
+
+[project.optional-dependencies]
+dev = ["black", "isort"]
+
+[project.urls]
+Homepage = "https://github.com/justin-delano/jdgenometracks"
