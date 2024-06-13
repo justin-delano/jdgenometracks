@@ -1,0 +1,38 @@
+# Packages
+*.egg
+*.egg-info
+dist
+build
+eggs
+parts
+bin
+var
+sdist
+develop-eggs
+docs/_build
+.installed.cfg
+lib
+lib64
+__pycache__
+
+# Installer logs
+pip-log.txt
+
+# Unit test / coverage reports
+.coverage
+.tox
+nosetests.xml
+
+# pyenv local versions list
+.python-version
+
+
+# OSX
+.DS_Store
+
+# Generated files
+MANIFEST
+build/
+build_bug/
+dist/
+py*dist/
