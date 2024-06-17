@@ -75,7 +75,7 @@ def construct_track(file_path: str, **kwargs) -> GenomeTrack:
 
 def _get_height_props(tracks: npt.ArrayLike[GenomeTrack]) -> list[float]:
     new_heights = []
-    for track in tracks:
+    for track in tracks[:,0]:
         if track.share_with_previous:
             continue
         elif track.height_prop is not None:
