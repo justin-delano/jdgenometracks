@@ -88,7 +88,9 @@ def _get_height_props(tracks: npt.ArrayLike[GenomeTrack]) -> list[float]:
 
 def _get_xlim_bedlim(tracks:npt.ArrayLike[GenomeTrack], column_region: str | None) -> tuple[int, int, int]:
     max_bed_regions = 0
-    for idx, track in enumerate(tracks):
+    xmin = None
+    xmax = None
+    for track in tracks:
         if track.data is None or track.data.empty:
             continue
 
@@ -96,7 +98,7 @@ def _get_xlim_bedlim(tracks:npt.ArrayLike[GenomeTrack], column_region: str | Non
         if formatted_data.empty:
             continue
 
-        if idx == 0:
+        if xmin is None or xmax is None:
             xmin = formatted_data["chromStart"].min()
             xmax = formatted_data["chromEnd"].max()
         else:
