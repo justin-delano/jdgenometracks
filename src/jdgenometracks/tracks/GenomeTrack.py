@@ -58,8 +58,8 @@ class GenomeTrack:
             )
             formatted_data = self.data[
                 (self.data["chrom"] == chrom)
-                & (self.data["chromStart"] >= start)
-                & (self.data["chromEnd"] <= end)
+                & ((self.data["chromStart"].between(start, end))
+                | (self.data["chromEnd"].between(start, end)))
             ].reset_index(drop=True)
         else:
             formatted_data = self.data
