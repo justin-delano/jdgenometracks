@@ -5,7 +5,7 @@ import numpy as np
 import numpy.typing as npt
 import plotly.graph_objects as go
 import plotly.subplots as ps
-
+import scipy as sp
 from .tracks.BedTrack import BedTrack
 from .tracks.GenomeTrack import GenomeTrack
 from .utils import _get_col_limits, _get_height_props
@@ -19,11 +19,17 @@ class PlotlyPlotter:
     def __post_init__(self):
         self.tracks = np.array(self.tracks) if not isinstance(self.tracks, np.ndarray) else self.tracks
 
-    def _plot_single_track(
+    def plot_single_track(
         self, subplots: go.Figure, track: GenomeTrack, row: int, col: int, **kwargs
     ) -> None:
-        track.plot_plotly(subplots, row, col, **kwargs)
+        if isinstance(track, BedTrack):
+            bed_region_coverage = track.plot_plotly(subplots, row, col, **kwargs)
+        else:
+            track.plot_plotly(subplots, row, col, **kwargs)
+            bed_region_coverage = None
+
         track.add_hlines_plotly(subplots, row, col, **kwargs)
+        return bed_region_coverage
 
     def plot_all_tracks(
         self,
@@ -112,6 +118,7 @@ class PlotlyPlotter:
                 self.tracks[:, data_col], column_regions[data_col], relative_x_axis
             )
 
+            bed_region_coverage = sp.sparse.csr_matrix((1, xmax - xmin))
             for data_row in range(self.tracks.shape[0]):
                 track = self.tracks[data_row, data_col]
 
@@ -120,26 +127,38 @@ class PlotlyPlotter:
 
                 if track.share_with_previous:
                     plot_row -= 1
+                else:
+                    bed_region_coverage = sp.sparse.csr_matrix((1, xmax - xmin))
+                # if isinstance(track, BedTrack):
+                #     if plot_col == 1 and plot_row == 1:
+                #         axis_num = ""
+                #     else:
+                #         axis_num = f"{2*plot_row + plot_col%2}"
 
+                #     extra_options["offset"] = sum(
+                #         [
+                #             1
+                #             for trace in subplots.data
+                #             if (
+                #                 getattr(trace, "xaxis", None),
+                #                 getattr(trace, "yaxis", None),
+                #             )
+                #             == (f"x{axis_num}", f"y{axis_num}")
+                #         ]
+                #     )
                 if isinstance(track, BedTrack):
-                    if plot_col == 1 and plot_row == 1:
-                        axis_num = ""
-                    else:
-                        axis_num = f"{2*plot_row + plot_col%2}"
+                    extra_options["bed_region_coverage"] = bed_region_coverage
 
-                    extra_options["offset"] = sum(
-                        [
-                            1
-                            for trace in subplots.data
-                            if (
-                                getattr(trace, "xaxis", None),
-                                getattr(trace, "yaxis", None),
-                            )
-                            == (f"x{axis_num}", f"y{axis_num}")
-                        ]
+                    bed_region_coverage = self.plot_single_track(
+                    subplots,
+                    track,
+                    row=plot_row,
+                    col=plot_col,
+                    region=column_regions[data_col],
+                    **extra_options,
                     )
-
-                self._plot_single_track(
+                else:
+                    self.plot_single_track(
                     subplots,
                     track,
                     row=plot_row,
@@ -147,6 +166,7 @@ class PlotlyPlotter:
                     region=column_regions[data_col],
                     **extra_options,
                 )
+
                 subplots.update_xaxes(
                     range=[xmin, xmax],
                     tickformatstops=[

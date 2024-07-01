@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import numpy.typing as npt
 from matplotlib.axes import Axes
-
+import scipy as sp
 from .tracks.BedTrack import BedTrack
 from .tracks.GenomeTrack import GenomeTrack
 from .utils import _get_col_limits, _get_height_props
@@ -22,10 +22,16 @@ class MPLPlotter:
         self.tracks = np.array(self.tracks) if not isinstance(self.tracks, np.ndarray) else self.tracks
 
     def plot_single_track(self, subplot: Axes, track: GenomeTrack, **kwargs) -> None:
-        track.plot_mpl(subplot, **kwargs)
+        if isinstance(track, BedTrack):
+            bed_region_coverage = track.plot_mpl(subplot, **kwargs)
+        else:
+            track.plot_mpl(subplot, **kwargs)
+            bed_region_coverage = None
+
         track.add_hlines_mpl(subplot, **kwargs)
         subplot.spines["top"].set_visible(False)
         subplot.spines["right"].set_visible(False)
+        return bed_region_coverage
 
     def plot_all_tracks(
         self,
@@ -116,6 +122,8 @@ class MPLPlotter:
                 self.tracks[:, data_col], column_regions[data_col], relative_x_axis
             )
 
+            bed_region_coverage = sp.sparse.csr_matrix((1, xmax - xmin))
+
             for data_row in range(self.tracks.shape[0]):
                 track = self.tracks[data_row, data_col]
 
@@ -124,18 +132,29 @@ class MPLPlotter:
 
                 if track.share_with_previous:
                     plot_row -= 1
+                else:
+                    bed_region_coverage = sp.sparse.csr_matrix((1, xmax - xmin))
 
+                # if isinstance(track, BedTrack):
+                #     extra_options["offset"] = len(
+                #         subplots[plot_row, plot_col].patches  # type: ignore
+                #     )
                 if isinstance(track, BedTrack):
-                    extra_options["offset"] = len(
-                        subplots[plot_row, plot_col].patches  # type: ignore
-                    )
+                    extra_options["bed_region_coverage"] = bed_region_coverage
 
-                self.plot_single_track(
-                    subplots[plot_row, plot_col],  # type: ignore
-                    track,
-                    region=column_regions[data_col],
-                    **extra_options,
-                )
+                    bed_region_coverage = self.plot_single_track(
+                        subplots[plot_row, plot_col],  # type: ignore
+                        track,
+                        region=column_regions[data_col],
+                        **extra_options,
+                    )
+                else:
+                    self.plot_single_track(
+                        subplots[plot_row, plot_col],  # type: ignore
+                        track,
+                        region=column_regions[data_col],
+                        **extra_options,
+                    )
                 subplots[plot_row, plot_col].set_xlim(xmin, xmax)
                 plot_row += 1
 
