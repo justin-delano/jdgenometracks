@@ -132,4 +132,7 @@ def _get_col_limits(
         xmax -= xmin
         extra_options["axis_shift"] = xmin
 
+    extra_options["xmin"] = xmin
+    extra_options["xmax"] = xmax
+
     return xmin, xmax, extra_options

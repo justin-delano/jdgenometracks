@@ -129,26 +129,9 @@ class PlotlyPlotter:
                     plot_row -= 1
                 else:
                     bed_region_coverage = sp.sparse.csr_matrix((1, xmax - xmin))
-                # if isinstance(track, BedTrack):
-                #     if plot_col == 1 and plot_row == 1:
-                #         axis_num = ""
-                #     else:
-                #         axis_num = f"{2*plot_row + plot_col%2}"
 
-                #     extra_options["offset"] = sum(
-                #         [
-                #             1
-                #             for trace in subplots.data
-                #             if (
-                #                 getattr(trace, "xaxis", None),
-                #                 getattr(trace, "yaxis", None),
-                #             )
-                #             == (f"x{axis_num}", f"y{axis_num}")
-                #         ]
-                #     )
                 if isinstance(track, BedTrack):
                     extra_options["bed_region_coverage"] = bed_region_coverage
-
                     bed_region_coverage = self.plot_single_track(
                     subplots,
                     track,

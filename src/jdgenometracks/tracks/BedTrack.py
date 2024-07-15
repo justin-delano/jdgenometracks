@@ -21,7 +21,10 @@ class BedTrack(GenomeTrack):
         bed_region_coverage = kwargs.get("bed_region_coverage", 0)
 
         subset_region = kwargs.get("subset_region", None)
-        subset_region_start  = int(subset_region.split(":")[1].split("-")[0])
+        if subset_region is not None:
+            subset_region_start  = int(subset_region.split(":")[1].split("-")[0])
+        else:
+            subset_region_start = kwargs.get("xmin")
 
         axis_shift = kwargs.get("axis_shift", 0)
         if subset_region is not None:
@@ -36,7 +39,7 @@ class BedTrack(GenomeTrack):
                 color = self.main_color
 
             try:
-                y = bed_region_coverage[0, max(0, region["chromStart"]-subset_region_start):min(region["chromEnd"]-subset_region_start, bed_region_coverage.shape[1])].max()+1
+                y = bed_region_coverage[0, max(0, region["chromStart"]-subset_region_start)+1:min(region["chromEnd"]-subset_region_start, bed_region_coverage.shape[1])-1].max()+1
             except ValueError as e:
                 y=0
 
@@ -60,9 +63,8 @@ class BedTrack(GenomeTrack):
             )
 
             new_coverage = np.zeros(bed_region_coverage.shape)
-            new_coverage[0, max(0, region["chromStart"]-subset_region_start):min(region["chromEnd"]-subset_region_start, bed_region_coverage.shape[1])] = y
+            new_coverage[0, max(0, region["chromStart"]-subset_region_start)-1:min(region["chromEnd"]-subset_region_start+5, bed_region_coverage.shape[1])+1] = y
             bed_region_coverage = bed_region_coverage.maximum(sp.sparse.csr_matrix(new_coverage))
-
 
         ax.xaxis.set_tick_params(bottom=False)
         ax.yaxis.set_tick_params(left=False, labelleft=False)
@@ -82,7 +84,10 @@ class BedTrack(GenomeTrack):
     ):
         bed_region_coverage = kwargs.get("bed_region_coverage", 0)
         subset_region = kwargs.get("subset_region", None)
-        subset_region_start  = int(subset_region.split(":")[1].split("-")[0])
+        if subset_region is not None:
+            subset_region_start  = int(subset_region.split(":")[1].split("-")[0])
+        else:
+            subset_region_start = kwargs.get("xmin")
         axis_shift = kwargs.get("axis_shift", 0)
 
         if subset_region is not None:
@@ -97,7 +102,7 @@ class BedTrack(GenomeTrack):
                 color = self.main_color
 
             try:
-                y = bed_region_coverage[0, max(0, region["chromStart"]-subset_region_start):min(region["chromEnd"]-subset_region_start, bed_region_coverage.shape[1])].max()+1
+                y = bed_region_coverage[0, max(0, region["chromStart"]-subset_region_start)-1:min(region["chromEnd"]-subset_region_start, bed_region_coverage.shape[1])+1].max()+1
             except ValueError as e:
                 y=0
 
@@ -128,9 +133,8 @@ class BedTrack(GenomeTrack):
                 col=col,
             )
             new_coverage = np.zeros(bed_region_coverage.shape)
-            new_coverage[0, max(0, region["chromStart"]-subset_region_start):min(region["chromEnd"]-subset_region_start, bed_region_coverage.shape[1])] = y
+            new_coverage[0, max(0, region["chromStart"]-subset_region_start)-1:min(region["chromEnd"]-subset_region_start, bed_region_coverage.shape[1])+1] = y
             bed_region_coverage = bed_region_coverage.maximum(sp.sparse.csr_matrix(new_coverage))
-
 
         fig.update_xaxes(
             showline=False,

@@ -4,7 +4,7 @@ jdgenometracks
 A Python package for generating genome browser tracks using Matplotlib and Plotly.
 """
 
-__version__ = "0.1.51"
+__version__ = "0.1.53"
 __author__ = "Justin Delano"
 
 from .MPLPlotter import MPLPlotter  # noqa: F401
