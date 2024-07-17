@@ -135,10 +135,6 @@ class MPLPlotter:
                 else:
                     bed_region_coverage = sp.sparse.csr_matrix((1, xmax - xmin))
 
-                # if isinstance(track, BedTrack):
-                #     extra_options["offset"] = len(
-                #         subplots[plot_row, plot_col].patches  # type: ignore
-                #     )
                 if isinstance(track, BedTrack):
                     extra_options["bed_region_coverage"] = bed_region_coverage
 

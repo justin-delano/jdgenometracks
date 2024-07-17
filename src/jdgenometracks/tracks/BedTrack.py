@@ -1,10 +1,11 @@
 from dataclasses import dataclass
 
+import numpy as np
 import plotly.graph_objects as go
+import scipy as sp
 from matplotlib.axes import Axes
 from matplotlib.patches import Rectangle
-import scipy as sp
-import numpy as np
+
 from .GenomeTrack import GenomeTrack
 
 
@@ -12,9 +13,8 @@ from .GenomeTrack import GenomeTrack
 class BedTrack(GenomeTrack):
     rect_border_width: int = 2
     rect_height: float = 1
-    rect_padding: float = 0.2
+    rect_padding: float = 0
     use_global_max: bool = False
-    use_offset: bool = True
 
     def plot_mpl(self, ax: Axes, **kwargs):
 
@@ -22,7 +22,7 @@ class BedTrack(GenomeTrack):
 
         subset_region = kwargs.get("subset_region", None)
         if subset_region is not None:
-            subset_region_start  = int(subset_region.split(":")[1].split("-")[0])
+            subset_region_start = int(subset_region.split(":")[1].split("-")[0])
         else:
             subset_region_start = kwargs.get("xmin")
 
@@ -39,9 +39,17 @@ class BedTrack(GenomeTrack):
                 color = self.main_color
 
             try:
-                y = bed_region_coverage[0, max(0, region["chromStart"]-subset_region_start)+1:min(region["chromEnd"]-subset_region_start, bed_region_coverage.shape[1])-1].max()+1
+                y = bed_region_coverage[
+                    0,
+                    max(0, region["chromStart"] - subset_region_start)
+                    + 1 : min(
+                        region["chromEnd"] - subset_region_start,
+                        bed_region_coverage.shape[1],
+                    )
+                    - 1,
+                ].max()
             except ValueError as e:
-                y=0
+                y = 0
 
             region_rect = Rectangle(
                 (region["chromStart"], y + self.rect_padding),
@@ -63,15 +71,27 @@ class BedTrack(GenomeTrack):
             )
 
             new_coverage = np.zeros(bed_region_coverage.shape)
-            new_coverage[0, max(0, region["chromStart"]-subset_region_start)-1:min(region["chromEnd"]-subset_region_start+5, bed_region_coverage.shape[1])+1] = y
-            bed_region_coverage = bed_region_coverage.maximum(sp.sparse.csr_matrix(new_coverage))
+            new_coverage[
+                0,
+                max(0, region["chromStart"] - subset_region_start)
+                - 1 : min(
+                    region["chromEnd"] - subset_region_start + 5,
+                    bed_region_coverage.shape[1],
+                )
+                + 1,
+            ] = (
+                y + self.rect_height
+            )
+            bed_region_coverage = bed_region_coverage.maximum(
+                sp.sparse.csr_matrix(new_coverage)
+            )
 
         ax.xaxis.set_tick_params(bottom=False)
         ax.yaxis.set_tick_params(left=False, labelleft=False)
         ax.spines["left"].set_visible(False)
         ax.spines["bottom"].set_visible(False)
         if self.use_global_max:
-            ax.set_ylim(0, max(kwargs.get("max_regions", 1), 1) * self.rect_height)
+            ax.set_ylim(0, bed_region_coverage.max() * 1.1)
 
         return bed_region_coverage
 
@@ -85,7 +105,7 @@ class BedTrack(GenomeTrack):
         bed_region_coverage = kwargs.get("bed_region_coverage", 0)
         subset_region = kwargs.get("subset_region", None)
         if subset_region is not None:
-            subset_region_start  = int(subset_region.split(":")[1].split("-")[0])
+            subset_region_start = int(subset_region.split(":")[1].split("-")[0])
         else:
             subset_region_start = kwargs.get("xmin")
         axis_shift = kwargs.get("axis_shift", 0)
@@ -102,9 +122,17 @@ class BedTrack(GenomeTrack):
                 color = self.main_color
 
             try:
-                y = bed_region_coverage[0, max(0, region["chromStart"]-subset_region_start)-1:min(region["chromEnd"]-subset_region_start, bed_region_coverage.shape[1])+1].max()+1
+                y = bed_region_coverage[
+                    0,
+                    max(0, region["chromStart"] - subset_region_start)
+                    - 1 : min(
+                        region["chromEnd"] - subset_region_start,
+                        bed_region_coverage.shape[1],
+                    )
+                    + 1,
+                ].max()
             except ValueError as e:
-                y=0
+                y = 0
 
             fig.add_trace(
                 go.Scatter(
@@ -133,8 +161,20 @@ class BedTrack(GenomeTrack):
                 col=col,
             )
             new_coverage = np.zeros(bed_region_coverage.shape)
-            new_coverage[0, max(0, region["chromStart"]-subset_region_start)-1:min(region["chromEnd"]-subset_region_start, bed_region_coverage.shape[1])+1] = y
-            bed_region_coverage = bed_region_coverage.maximum(sp.sparse.csr_matrix(new_coverage))
+            new_coverage[
+                0,
+                max(0, region["chromStart"] - subset_region_start)
+                - 1 : min(
+                    region["chromEnd"] - subset_region_start,
+                    bed_region_coverage.shape[1],
+                )
+                + 1,
+            ] = (
+                y + self.rect_height
+            )
+            bed_region_coverage = bed_region_coverage.maximum(
+                sp.sparse.csr_matrix(new_coverage)
+            )
 
         fig.update_xaxes(
             showline=False,
@@ -147,7 +187,7 @@ class BedTrack(GenomeTrack):
         fig.update_yaxes(showticklabels=False, row=row, col=col)
         if self.use_global_max:
             fig.update_yaxes(
-                range=[0, kwargs.get("max_regions", 1) * 1.1 * self.rect_height],
+                range=[0, bed_region_coverage.max() * 1.1],
                 row=row,
                 col=col,
             )
