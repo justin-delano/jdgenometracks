@@ -19,6 +19,8 @@ class BedGraphTrack(GenomeTrack):
     plot_point_sizes: Iterable[float] | None = None
     scatter_marker_mpl: str = "."
     scatter_marker_plotly: str = "0"
+    fill_color: str = "rgba(0,0,0,0)"
+    alpha: float = 1
 
     def plot_mpl(self, ax: Axes, **kwargs):
 
@@ -90,8 +92,8 @@ class BedGraphTrack(GenomeTrack):
                     mode="lines",
                     line=dict(color=self.main_color, width=self.plot_line_width),
                     fill="tozeroy",
-                    fillcolor=self.main_color,
-                    opacity=0.5,
+                    fillcolor=self.fill_color,
+                    opacity=self.alpha,
                     showlegend=False,
                     name=self.track_name,
                 ),
@@ -103,13 +105,15 @@ class BedGraphTrack(GenomeTrack):
                 go.Bar(
                     x=mid_points,
                     y=y_values,
-                    marker=dict(color=self.main_color),
+                    marker=dict(color=self.main_color, line_color=self.main_color),
                     showlegend=False,
                     name=self.track_name,
                 ),
                 row=row,
                 col=col,
             )
+            fig.update_layout(bargap=0)
+
         elif self.plot_type == "points":
             fig.add_trace(
                 go.Scatter(
@@ -118,8 +122,11 @@ class BedGraphTrack(GenomeTrack):
                     mode="markers",
                     marker=dict(
                         color=self.main_color,
+                        line_color=self.main_color,
                         size=self.plot_point_sizes,
                         symbol=self.scatter_marker_plotly,
+                        opacity=self.alpha,
+                        line_width=self.plot_line_width,
                     ),
                     showlegend=False,
                     name=self.track_name,

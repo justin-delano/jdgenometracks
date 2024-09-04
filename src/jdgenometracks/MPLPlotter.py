@@ -6,8 +6,9 @@ import matplotlib.figure
 import matplotlib.pyplot as plt
 import numpy as np
 import numpy.typing as npt
-from matplotlib.axes import Axes
 import scipy as sp
+from matplotlib.axes import Axes
+
 from .tracks.BedTrack import BedTrack
 from .tracks.GenomeTrack import GenomeTrack
 from .utils import _get_col_limits, _get_height_props
@@ -19,7 +20,11 @@ class MPLPlotter:
     total_height: float
 
     def __post_init__(self):
-        self.tracks = np.array(self.tracks) if not isinstance(self.tracks, np.ndarray) else self.tracks
+        self.tracks = (
+            np.array(self.tracks)
+            if not isinstance(self.tracks, np.ndarray)
+            else self.tracks
+        )
 
     def plot_single_track(self, subplot: Axes, track: GenomeTrack, **kwargs) -> None:
         if isinstance(track, BedTrack):
@@ -103,8 +108,13 @@ class MPLPlotter:
             layout="constrained",
         )
 
-        if subplots.ndim == 1:
-            subplots = subplots.reshape(-1, 1)
+        if (num_distinct_rows, self.tracks.shape[1]) == (1, 1):
+            subplots = np.array(subplots).reshape(-1, 1)
+        elif subplots.shape == (1,):
+            subplots = np.array(subplots).reshape(1, -1)
+        elif subplots.shape[0] == 1:
+            subplots = subplots.reshape(1, -1)
+
         if column_titles or row_titles:
             for data_col, title in enumerate(column_titles or []):
                 subplots[0, data_col].set_title(title)

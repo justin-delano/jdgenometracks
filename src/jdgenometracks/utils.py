@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import numpy.typing as npt
 import pandas as pd
 
 from .tracks.BedGraphTrack import BedGraphTrack
 from .tracks.BedTrack import BedTrack
 from .tracks.GenomeTrack import GenomeTrack
 from .tracks.HelperTracks import SpacerTrack, XAxisTrack
-import numpy.typing as npt
+
 
 def construct_track(file_path: str, **kwargs) -> GenomeTrack:
     """_summary_
@@ -42,7 +43,31 @@ def construct_track(file_path: str, **kwargs) -> GenomeTrack:
     if "axis" in file_path.lower():
         return XAxisTrack("Axis", "Axis", track_name, pd.DataFrame(), **kwargs)
 
-    data = pd.read_csv(file_path, sep="\t", header=None)
+    try:
+        data = pd.read_csv(file_path, sep="\t", header=None)
+    except pd.errors.EmptyDataError:
+        if track_type == "bed":
+            return BedTrack(
+                file_path,
+                track_type,
+                track_name,
+                pd.DataFrame(
+                    columns=["chrom", "chromStart", "chromEnd", "name", "score"]
+                ),
+                **kwargs,
+            )
+        elif track_type == "bedgraph":
+            return BedGraphTrack(
+                file_path,
+                track_type,
+                track_name,
+                pd.DataFrame(
+                    columns=["chrom", "chromStart", "chromEnd", "value", "name"]
+                ),
+                **kwargs,
+            )
+        else:
+            raise NotImplementedError("Track type not yet supported")
 
     if track_type == "bed":
         all_bed_columns = [
@@ -75,7 +100,7 @@ def construct_track(file_path: str, **kwargs) -> GenomeTrack:
 
 def _get_height_props(tracks: npt.ArrayLike[GenomeTrack]) -> list[float]:
     new_heights = []
-    for track in tracks[:,0]:
+    for track in tracks[:, 0]:
         if track.share_with_previous:
             continue
         elif track.height_prop is not None:
@@ -86,7 +111,9 @@ def _get_height_props(tracks: npt.ArrayLike[GenomeTrack]) -> list[float]:
     return new_heights
 
 
-def _get_xlim_bedlim(tracks:npt.ArrayLike[GenomeTrack], column_region: str | None) -> tuple[int, int, int]:
+def _get_xlim_bedlim(
+    tracks: npt.ArrayLike[GenomeTrack], column_region: str | None
+) -> tuple[int, int, int]:
     max_bed_regions = 0
     xmin = None
     xmax = None
@@ -112,7 +139,9 @@ def _get_xlim_bedlim(tracks:npt.ArrayLike[GenomeTrack], column_region: str | Non
 
 
 def _get_col_limits(
-    tracks_col:npt.ArrayLike[GenomeTrack], column_region: str | None, relative_x_axis: bool
+    tracks_col: npt.ArrayLike[GenomeTrack],
+    column_region: str | None,
+    relative_x_axis: bool,
 ) -> tuple[int, int, dict]:
     extra_options = {}
     if column_region is not None:
@@ -127,10 +156,10 @@ def _get_col_limits(
     xmin, xmax, max_bed_regions = _get_xlim_bedlim(tracks_col, column_region)
 
     extra_options["max_regions"] = max_bed_regions
-    if relative_x_axis and xmin and xmax:
-        xmin -= xmin
-        xmax -= xmin
-        extra_options["axis_shift"] = xmin
+    if relative_x_axis:
+        extra_options["axis_shift"] = xmin - 1
+        xmax -= xmin - 1
+        xmin -= xmin - 1
 
     extra_options["xmin"] = xmin
     extra_options["xmax"] = xmax

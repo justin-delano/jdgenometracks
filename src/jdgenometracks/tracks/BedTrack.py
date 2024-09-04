@@ -11,7 +11,8 @@ from .GenomeTrack import GenomeTrack
 
 @dataclass
 class BedTrack(GenomeTrack):
-    rect_border_width: int = 2
+    rect_border_width: int = 0
+    rect_border_color: str = "black"
     rect_height: float = 1
     rect_padding: float = 0
     use_global_max: bool = False
@@ -116,10 +117,10 @@ class BedTrack(GenomeTrack):
             xdata = self.format_data(axis_shift=axis_shift)
 
         for idx, region in xdata.iterrows():
-            if "itemRGB" in region:
-                color = f"rgb({region['itemRGB']})"
-            else:
-                color = self.main_color
+            # if "itemRGB" in region:
+            #     color = f"rgb({region['itemRGB']})"
+            # else:
+            color = self.main_color
 
             try:
                 y = bed_region_coverage[
@@ -150,10 +151,12 @@ class BedTrack(GenomeTrack):
                         y + self.rect_padding,
                         y + self.rect_padding,
                     ],
-                    mode="lines",
                     fill="toself",
+                    marker=dict(opacity=0),
                     fillcolor=color,
-                    line=dict(color=color),
+                    line=dict(
+                        color=self.rect_border_color, width=self.rect_border_width
+                    ),
                     showlegend=False,
                     name=region["name"],
                 ),

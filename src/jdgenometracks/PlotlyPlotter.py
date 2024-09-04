@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
 
 import numpy as np
@@ -6,6 +7,7 @@ import numpy.typing as npt
 import plotly.graph_objects as go
 import plotly.subplots as ps
 import scipy as sp
+
 from .tracks.BedTrack import BedTrack
 from .tracks.GenomeTrack import GenomeTrack
 from .utils import _get_col_limits, _get_height_props
@@ -17,7 +19,11 @@ class PlotlyPlotter:
     total_height: float
 
     def __post_init__(self):
-        self.tracks = np.array(self.tracks) if not isinstance(self.tracks, np.ndarray) else self.tracks
+        self.tracks = (
+            np.array(self.tracks)
+            if not isinstance(self.tracks, np.ndarray)
+            else self.tracks
+        )
 
     def plot_single_track(
         self, subplots: go.Figure, track: GenomeTrack, row: int, col: int, **kwargs
@@ -29,6 +35,14 @@ class PlotlyPlotter:
             bed_region_coverage = None
 
         track.add_hlines_plotly(subplots, row, col, **kwargs)
+        if track.axis_ticks:
+            subplots.update_yaxes(
+                ticks="outside",
+                tickson="labels",
+                ticklen=5,
+                row=row,
+                col=col,
+            )
         return bed_region_coverage
 
     def plot_all_tracks(
@@ -92,6 +106,7 @@ class PlotlyPlotter:
             rows=num_distinct_rows,
             cols=self.tracks.shape[1],
             shared_xaxes="columns",  # type: ignore
+            shared_yaxes="rows",  # type: ignore
             row_heights=height_props,
             row_titles=row_titles,
             column_widths=width_props,
@@ -133,22 +148,22 @@ class PlotlyPlotter:
                 if isinstance(track, BedTrack):
                     extra_options["bed_region_coverage"] = bed_region_coverage
                     bed_region_coverage = self.plot_single_track(
-                    subplots,
-                    track,
-                    row=plot_row,
-                    col=plot_col,
-                    region=column_regions[data_col],
-                    **extra_options,
+                        subplots,
+                        track,
+                        row=plot_row,
+                        col=plot_col,
+                        region=column_regions[data_col],
+                        **extra_options,
                     )
                 else:
                     self.plot_single_track(
-                    subplots,
-                    track,
-                    row=plot_row,
-                    col=plot_col,
-                    region=column_regions[data_col],
-                    **extra_options,
-                )
+                        subplots,
+                        track,
+                        row=plot_row,
+                        col=plot_col,
+                        region=column_regions[data_col],
+                        **extra_options,
+                    )
 
                 subplots.update_xaxes(
                     range=[xmin, xmax],
@@ -162,6 +177,15 @@ class PlotlyPlotter:
                     col=plot_col,
                 )
                 plot_row += 1
+
+        subplots.update_layout(
+            font_family="Arial",
+            font_color="black",
+            title_font_family="Arial",
+            title_font_color="black",
+        )
+        subplots.update_annotations(font_family="Arial", font_color="black")
+        subplots.update_xaxes(title_font_family="Arial", tickfont=dict(color="black"))
 
         if show_fig:
             subplots.show()

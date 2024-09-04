@@ -29,6 +29,7 @@ class GenomeTrack:
     share_with_previous: bool = False
     x_axis_type: str | None = None
     x_axis_interval: int | None = None
+    axis_ticks: bool = False
 
     def add_hlines_mpl(self, ax: Axes, **kwargs):
         if self.hlines is None:
@@ -58,8 +59,10 @@ class GenomeTrack:
             )
             formatted_data = self.data[
                 (self.data["chrom"] == chrom)
-                & ((self.data["chromStart"].between(start, end))
-                | (self.data["chromEnd"].between(start, end)))
+                & (
+                    (self.data["chromStart"].between(start, end))
+                    | (self.data["chromEnd"].between(start, end))
+                )
             ].reset_index(drop=True)
         else:
             formatted_data = self.data
