@@ -1,7 +1,3 @@
-Here's the updated **README** for your package, **jdgenometracks**, with the new two-column example included. I've also included explanations, installation instructions, and relevant usage examples.
-
----
-
 # **jdgenometracks**
 
 ## Overview
@@ -20,8 +16,7 @@ At the core of the package is the **TrackFactory**, which allows users to easily
 ## Installation
 
 ```bash
-# Install required dependencies
-pip install -r requirements.txt
+pip install jdgenometracks
 ```
 
 ## Getting Started
@@ -77,7 +72,7 @@ tracks = [
         track_name="Track 1",
         track_type="bedgraph",
         plot_type="lines",
-        mpl_options={
+        mpl_plot_options={
             "color": "blue",
             "linewidth": 2
         }
@@ -86,10 +81,14 @@ tracks = [
         file_path="example_data/track2.bed",
         track_name="Track 2",
         track_type="bed",
-        mpl_options={
+        mpl_rect_options={
             "color": "red",
             "linewidth": 2
-        }
+        },
+        mpl_text_options={
+            "va": "center"
+        },
+        mpl_text_alignment="right"
     ),
     jdg.TrackFactory.create_track(
         track_name="Bottom Axis",
@@ -137,7 +136,7 @@ tracks = [
         track_type="axis",
         axis_type="verbose"
     ),
-    
+
     # Second Column (Column 2)
     jdg.TrackFactory.create_track(
         file_path="example_data/track1_column2.bedgraph",
@@ -225,7 +224,7 @@ jdg.TrackFactory.create_track(
 
 ## Customizing Plots
 
-Each track can be customized using `plotly_options` for **Plotly** keyword arguments or `mpl_options` for **Matplotlib** keyword arguments. Example options include:
+Each track can be customized using **Plotly** keyword arguments or **Matplotlib** keyword arguments. Example options include:
 
 - **Colors**: Set line and marker colors.
 - **Line Styles**: Adjust line widths and types.
