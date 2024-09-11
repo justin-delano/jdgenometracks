@@ -275,7 +275,7 @@ class BedTrack(GenomeTrack):
                         y + self.rect_padding,
                     ],
                     fill="toself",
-                    marker=dict(opacity=0),
+                    marker=dict(color="rgba(0,0,0,0)"),
                     showlegend=self.show_legend,
                     name=region["name"],
                     **self.plotly_options,
