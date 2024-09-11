@@ -33,8 +33,10 @@ class BedTrack(GenomeTrack):
 
     mpl_rect_options: dict = field(default_factory=dict)
     mpl_text_options: dict = field(default_factory=dict)
-    mpl_text_alignment: Literal["left", "above", "right"] = "above"
-    plotly_options: dict = field(default_factory=dict)
+
+    plotly_plot_options: dict = field(default_factory=dict)
+    plotly_text_options: dict = field(default_factory=dict)
+    label_alignment: Literal["left", "above", "right", False] = False
 
     def __post_init__(self):
         """Ensures data is loaded during initialization."""
@@ -168,24 +170,24 @@ class BedTrack(GenomeTrack):
             ax.add_patch(region_rect)
 
             # Add text label
-            if self.mpl_text_alignment == "above":
+            if self.label_alignment == "above":
                 ax.text(
                     (region["chromEnd"] + region["chromStart"]) / 2,
                     y + self.rect_height + self.rect_padding,
                     region["name"],
                     **self.mpl_text_options,
                 )
-            elif self.mpl_text_alignment == "left":
+            elif self.label_alignment == "left":
                 ax.text(
                     region["chromStart"],
-                    y + self.rect_height / 2 - self.rect_padding,
+                    y + self.rect_height / 2,
                     region["name"],
                     **self.mpl_text_options,
                 )
-            elif self.mpl_text_alignment == "right":
+            elif self.label_alignment == "right":
                 ax.text(
                     region["chromEnd"],
-                    y + self.rect_height / 2 - self.rect_padding,
+                    y + self.rect_height / 2,
                     region["name"],
                     **self.mpl_text_options,
                 )
@@ -241,7 +243,7 @@ class BedTrack(GenomeTrack):
         for idx, region in cleaned_data.iterrows():
             # Set color if itemRGB is present and use_color_column is enabled
             if "itemRGB" in region and self.use_color_column:
-                self.plotly_options["fillcolor"] = f"rgb({region['itemRGB']})"
+                self.plotly_plot_options["fillcolor"] = f"rgb({region['itemRGB']})"
 
             # Calculate y-position from bed_region_coverage
             try:
@@ -274,15 +276,53 @@ class BedTrack(GenomeTrack):
                         y + self.rect_padding,
                         y + self.rect_padding,
                     ],
+                    mode="lines",
                     fill="toself",
-                    marker=dict(color="rgba(0,0,0,0)"),
                     showlegend=self.show_legend,
                     name=region["name"],
-                    **self.plotly_options,
+                    **self.plotly_plot_options,
                 ),
                 row=row,
                 col=col,
             )
+
+            # add annotation to side of rectangle
+            if self.label_alignment == "above":
+                fig.add_annotation(
+                    x=(region["chromEnd"] + region["chromStart"]) / 2,
+                    y=y + self.rect_height - self.rect_padding,
+                    text=region["name"],
+                    xanchor="center",
+                    yanchor="bottom",
+                    showarrow=False,
+                    row=row,
+                    col=col,
+                    **self.plotly_text_options,
+                )
+            elif self.label_alignment == "left":
+                fig.add_annotation(
+                    x=region["chromStart"],
+                    y=y + self.rect_height / 2,
+                    text=region["name"],
+                    xanchor="right",
+                    yanchor="middle",
+                    showarrow=False,
+                    row=row,
+                    col=col,
+                    **self.plotly_text_options,
+                )
+            elif self.label_alignment == "right":
+                fig.add_annotation(
+                    x=region["chromEnd"],
+                    y=y + self.rect_height / 2,
+                    text=region["name"],
+                    xanchor="left",
+                    yanchor="middle",
+                    showarrow=False,
+                    row=row,
+                    col=col,
+                    **self.plotly_text_options,
+                )
 
             # Update coverage
             bed_region_coverage = self.update_coverage(

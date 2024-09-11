@@ -210,8 +210,10 @@ class PlotlyPlotter:
         # Set default properties for layout if not provided
         height_props = height_props or TrackUtils.get_height_props(self.tracks)
         row_titles = row_titles or [""] * num_distinct_rows
-        width_props = width_props or [1 / self.tracks.shape[1]] * self.tracks.shape[1]
-        column_titles = column_titles or [""] * self.tracks.shape[1]
+        width_props = width_props or [
+            1 / self.tracks.shape[1] for _ in range(self.tracks.shape[1])
+        ]
+        column_titles = column_titles or ["" for _ in range(self.tracks.shape[1])]
         total_height = total_height or self.total_height
         total_width = total_width or self.total_width
 
