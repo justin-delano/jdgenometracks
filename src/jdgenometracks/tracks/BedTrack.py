@@ -24,6 +24,8 @@ class BedTrack(GenomeTrack):
         mpl_rect_options (dict): Matplotlib options for rectangles.
         mpl_text_options (dict): Matplotlib options for text labels.
         plotly_options (dict): Plotly options for the plotting traces.
+        plotly_text_options (dict): Plotly options for text labels.
+        label_alignment (Literal["left", "above", "right", False]): Alignment of text labels.
     """
 
     rect_height: float = 1
