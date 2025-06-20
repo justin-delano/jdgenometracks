@@ -243,7 +243,7 @@ class BedTrack(GenomeTrack):
         )
 
         for idx, region in cleaned_data.iterrows():
-            # Set color if itemRGB is present and use_color_column is enabled
+            # Set color if itemRGB is present and use_color_column is enabled'
             if "itemRGB" in region and self.use_color_column:
                 self.plotly_plot_options["fillcolor"] = f"rgb({region['itemRGB']})"
 

@@ -26,7 +26,18 @@ class TrackFactory:
 
         Returns:
             GenomeTrack: The created track object.
+
+        Raises:
+            ValueError: If required arguments are missing or invalid.
         """
+        # Validate input
+        if track_type is None and file_path is None:
+            raise ValueError("Either 'track_type' or 'file_path' must be provided.")
+        if track_type is not None and not isinstance(track_type, str):
+            raise TypeError("track_type must be a string if provided.")
+        if file_path is not None and not isinstance(file_path, str):
+            raise TypeError("file_path must be a string if provided.")
+
         # Handle special track types (axis, spacer) without file_path
         if track_type == "axis":
             track_name = kwargs.pop(

@@ -29,10 +29,24 @@ class MPLPlotter:
 
     def __post_init__(self):
         """
-        Ensures tracks are stored as a numpy array for consistency.
+        Ensures tracks are stored as a numpy array for consistency and validates input types.
         """
-        if not isinstance(self.tracks, np.ndarray):
-            self.tracks = np.array(self.tracks)
+        if not isinstance(self.tracks, (list, np.ndarray)):
+            raise TypeError(
+                f"tracks must be a list or numpy array, got {type(self.tracks)}"
+            )
+        self.tracks = np.array(self.tracks)
+        if self.tracks.size == 0:
+            raise ValueError("tracks array cannot be empty.")
+        for t in self.tracks.flatten():
+            if t is not None and not hasattr(t, "plot_mpl"):
+                raise TypeError(
+                    f"Each track must have a 'plot_mpl' method (got {type(t)})."
+                )
+        if not isinstance(self.total_height, (int, float)) or self.total_height <= 0:
+            raise ValueError("total_height must be a positive number.")
+        if not isinstance(self.total_width, (int, float)) or self.total_width <= 0:
+            raise ValueError("total_width must be a positive number.")
 
     def plot_single_track(
         self, subplot: Axes, track: GenomeTrack, **kwargs
@@ -158,8 +172,10 @@ class MPLPlotter:
         # Default layout properties
         height_props = height_props or TrackUtils.get_height_props(self.tracks)
         row_titles = row_titles or [""] * num_distinct_rows
-        width_props = width_props or [1 / self.tracks.shape[1]] * self.tracks.shape[1]
-        column_titles = column_titles or [""] * self.tracks.shape[1]
+        width_props = width_props or [
+            1 / self.tracks.shape[1] for _ in range(self.tracks.shape[1])
+        ]
+        column_titles = column_titles or ["" for _ in range(self.tracks.shape[1])]
         total_height = total_height or self.total_height
         total_width = total_width or self.total_width
 

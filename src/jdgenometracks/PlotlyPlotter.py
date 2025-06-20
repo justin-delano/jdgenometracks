@@ -28,10 +28,24 @@ class PlotlyPlotter:
 
     def __post_init__(self):
         """
-        Converts tracks into a numpy array if not already one and performs initialization.
+        Converts tracks into a numpy array if not already one and performs initialization with validation.
         """
-        if not isinstance(self.tracks, np.ndarray):
-            self.tracks = np.array(self.tracks)
+        if not isinstance(self.tracks, (list, np.ndarray)):
+            raise TypeError(
+                f"tracks must be a list or numpy array, got {type(self.tracks)}"
+            )
+        self.tracks = np.array(self.tracks)
+        if self.tracks.size == 0:
+            raise ValueError("tracks array cannot be empty.")
+        for t in self.tracks.flatten():
+            if t is not None and not hasattr(t, "plot_plotly"):
+                raise TypeError(
+                    f"Each track must have a 'plot_plotly' method (got {type(t)})."
+                )
+        if not isinstance(self.total_height, (int, float)) or self.total_height <= 0:
+            raise ValueError("total_height must be a positive number.")
+        if not isinstance(self.total_width, (int, float)) or self.total_width <= 0:
+            raise ValueError("total_width must be a positive number.")
 
     def plot_single_track(
         self, subplots: go.Figure, track: GenomeTrack, row: int, col: int, **kwargs
@@ -175,7 +189,7 @@ class PlotlyPlotter:
             total_height (float | None): The total height of the figure.
             height_props (list[float] | None): Heights of each row as proportions of the total height.
             row_titles (list[str] | None): Titles for each row in the figure.
-            width_props (list[float] | None): Widths of each column as proportions of the total width.
+            width_props (list[float] | None): Widths of each column as a proportion of the total width.
             column_titles (list[str] | None): Titles for each column in the figure.
             relative_x_axis (bool): If true, x-axes start at 0bp.
             show_fig (bool): If true, the figure is displayed.
