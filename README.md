@@ -33,18 +33,18 @@ tracks = [
         track_name="Track 1",
         track_type="bedgraph",
         plot_type="points",
-        plotly_options={
-            "marker_color": "blue",
-            "marker_size": 4
+        options={
+            "marker.color": "blue",
+            "marker.size": 4
         }
     ),
     jdg.TrackFactory.create_track(
         file_path="example_data/track2.bed",
         track_name="Track 2",
         track_type="bed",
-        plotly_options={
-            "fillcolor": "red",
-            "line_color": "black"
+        options={
+            "fill.color": "red",
+            "line.color": "black"
         }
     ),
     jdg.TrackFactory.create_track(
@@ -72,23 +72,21 @@ tracks = [
         track_name="Track 1",
         track_type="bedgraph",
         plot_type="lines",
-        mpl_plot_options={
-            "color": "blue",
-            "linewidth": 2
+        options={
+            "line.color": "blue",
+            "line.width": 2
         }
     ),
     jdg.TrackFactory.create_track(
         file_path="example_data/track2.bed",
         track_name="Track 2",
         track_type="bed",
-        mpl_rect_options={
-            "color": "red",
-            "linewidth": 2
+        options={
+            "fill.color": "red",
+            "line.width": 2,
+            "text.font_color": "black"
         },
-        mpl_text_options={
-            "va": "center"
-        },
-        mpl_text_alignment="right"
+        label_alignment="right"
     ),
     jdg.TrackFactory.create_track(
         track_name="Bottom Axis",
@@ -117,18 +115,18 @@ tracks = [
         track_name="Track 1 - Column 1",
         track_type="bedgraph",
         plot_type="points",
-        plotly_options={
-            "marker_color": "blue",
-            "marker_size": 4
+        options={
+            "marker.color": "blue",
+            "marker.size": 4
         }
     ),
     jdg.TrackFactory.create_track(
         file_path="example_data/track2_column1.bed",
         track_name="Track 2 - Column 1",
         track_type="bed",
-        plotly_options={
-            "fillcolor": "red",
-            "line_color": "black"
+        options={
+            "fill.color": "red",
+            "line.color": "black"
         }
     ),
     jdg.TrackFactory.create_track(
@@ -143,18 +141,18 @@ tracks = [
         track_name="Track 1 - Column 2",
         track_type="bedgraph",
         plot_type="lines",
-        plotly_options={
-            "line_color": "green",
-            "line_width": 2
+        options={
+            "line.color": "green",
+            "line.width": 2
         }
     ),
     jdg.TrackFactory.create_track(
         file_path="example_data/track2_column2.bed",
         track_name="Track 2 - Column 2",
         track_type="bed",
-        plotly_options={
-            "fillcolor": "purple",
-            "line_color": "black"
+        options={
+            "fill.color": "purple",
+            "line.color": "black"
         }
     ),
     jdg.TrackFactory.create_track(
@@ -191,9 +189,9 @@ jdg.TrackFactory.create_track(
     track_name="Example BEDGRAPH",
     track_type="bedgraph",
     plot_type="lines",
-    plotly_options={
-        "line_color": "green",
-        "line_width": 2
+    options={
+        "line.color": "green",
+        "line.width": 2
     }
 )
 ```
@@ -205,9 +203,9 @@ jdg.TrackFactory.create_track(
     file_path="path/to/file.bed",
     track_name="Example BED",
     track_type="bed",
-    plotly_options={
-        "fillcolor": "purple",
-        "line_width": 2
+    options={
+        "fill.color": "purple",
+        "line.width": 2
     }
 )
 ```
@@ -234,4 +232,6 @@ Each track can be customized using **Plotly** keyword arguments or **Matplotlib*
 ## Advanced Usage
 
 For more advanced use cases, you can extend the package to support new track types or customize existing ones by modifying the `TrackFactory` to handle additional parameters or features.
+
+For advanced usage, see the UNIFIED_STYLE_MAP in option_mapping.py for all available unified style keys.
 

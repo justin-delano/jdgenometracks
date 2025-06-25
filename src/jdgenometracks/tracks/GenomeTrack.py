@@ -10,59 +10,25 @@ from matplotlib.axes import Axes
 
 @dataclass
 class GenomeTrack:
-    """
-    A base class for genomic track visualization, providing support for handling
-    BED and BedGraph files, including horizontal line annotations, and managing
-    matplotlib and Plotly-based plotting.
-
-    Attributes:
-        file_path (str | None): Path to the input file for the track.
-        track_type (str | None): Type of track ('bed', 'bedgraph').
-        track_name (str | None): Name of the track.
-        data (pd.DataFrame | None): Data for the track, if preloaded.
-        axis_font_size (int): Font size for the axis labels.
-        text_font_size (int): Font size for the text annotations.
-        hlines (list | None): Horizontal lines to be drawn on the plot.
-        mpl_hline_options (dict): Matplotlib options for horizontal lines.
-        plotly_hline_options (dict): Plotly options for horizontal lines.
-        height_prop (float | None): Proportional height of the track.
-        share_with_previous (bool): Whether the track shares the x-axis with the previous track.
-        x_axis_type (str | None): Type of the x-axis (e.g., 'linear').
-        x_axis_interval (int | None): Interval for x-axis ticks.
-        axis_ticks (bool): Whether to show axis ticks.
-        show_legend (bool): Whether to display the legend in the plot.
-    """
-
-    file_path: str | None = None
-    track_type: str | None = None
-    track_name: str | None = None
     data: pd.DataFrame | None = None
-
-    # Horizontal Lines
-    hlines: list[float] | None = None
-    mpl_hline_options: dict = field(default_factory=dict)
-    plotly_hline_options: dict = field(default_factory=dict)
-
-    # X-axis properties
-    show_xaxis_ticks: bool = False
-    mpl_xaxis_options: dict = field(default_factory=dict)
-    plotly_xaxis_options: dict = field(default_factory=dict)
-
-    # Y-axis properties
-    show_yaxis_ticks: bool = True
-    mpl_yaxis_options: dict = field(default_factory=dict)
-    plotly_yaxis_options: dict = field(default_factory=dict)
-
-    # Structure
-    height_prop: float | None = None
-    share_with_previous: bool = False
-    mpl_legend_options: dict = field(default_factory=dict)
-    show_legend: bool = False
+    file_path: str | None = None
+    track_name: str | None = None
+    track_type: str | None = None  # 'bed' or 'bedgraph'
+    subplot_x: int = 0  # Column index for x-axis data
+    subplot_y: int = 0  # Column index for y-axis data
+    show_legend: bool = False  # Whether to show the legend for this track
+    hlines: list[float] = field(
+        default_factory=list
+    )  # Horizontal lines to draw on the plot
+    track_options: dict = field(
+        default_factory=dict
+    )  # Unified style options for this track
 
     def __post_init__(self):
         """
         Validates and initializes the instance after dataclass instantiation.
         Loads the track name and type based on the file path if not explicitly provided.
+        options should be a dict using the top-level keys from UNIFIED_STYLE_MAP.
         """
         # Ensure data or file path is provided
         if self.data is None:
@@ -144,9 +110,10 @@ class GenomeTrack:
         Args:
             ax (Axes): The matplotlib axis to add the horizontal lines to.
         """
+        hline_opts = self.track_options.get("hline", {})
         if self.hlines:
             for hline in self.hlines:
-                ax.axhline(hline, **self.mpl_hline_options)
+                ax.axhline(hline, **hline_opts)
 
     def add_hlines_plotly(self, fig: go.Figure, row: int, col: int):
         """
@@ -163,11 +130,11 @@ class GenomeTrack:
                     y=hline,
                     row=row,  # type: ignore
                     col=col,  # type: ignore
-                    **self.plotly_hline_options,
+                    **self.track_options.get("hline", {}),
                 )
 
     def format_data(
-        self, subset_region: str | None = None, axis_shift: int = 0
+        self, subset_region: str | None = None, axis_shift: int | None = 0
     ) -> pd.DataFrame:
         """
         Formats the data by subsetting and applying an axis shift, if specified.
@@ -225,11 +192,8 @@ class GenomeTrack:
 
     def plot_plotly(self, fig: go.Figure, row: int, col: int, **kwargs):
         """
-        Placeholder for plotting with Plotly. Should be implemented by subclasses.
-
-        Args:
-            fig (go.Figure): The Plotly figure to plot on.
-            row (int): The row index in the subplot.
-            col (int): The column index in the subplot.
+        Default Plotly plotting for base GenomeTrack (does nothing, but provides a safe interface).
+        Subclasses should override this method.
         """
-        raise NotImplementedError("Subclasses should implement this method.")
+        # Only unpack valid subdicts if called by a subclass
+        pass

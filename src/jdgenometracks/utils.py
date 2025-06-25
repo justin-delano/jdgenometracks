@@ -1,7 +1,10 @@
 from __future__ import annotations
 
-import numpy as np
+from typing import Any, Optional, Sequence, Tuple
+
 import pandas as pd
+from matplotlib import axis
+from matplotlib.pyplot import subplot
 
 from .tracks.BedGraphTrack import BedGraphTrack
 from .tracks.BedTrack import BedTrack
@@ -13,7 +16,10 @@ from .tracks.XAxisTrack import XAxisTrack
 class TrackFactory:
     @staticmethod
     def create_track(
-        file_path: str | None = None, track_type: str | None = None, **kwargs
+        file_path: str | None = None,
+        track_type: str | None = None,
+        track_options: dict[str, Any] = {},
+        **kwargs: Any,
     ) -> GenomeTrack:
         """
         Creates a GenomeTrack object based on the file path and type.
@@ -43,12 +49,26 @@ class TrackFactory:
             track_name = kwargs.pop(
                 "track_name", "Axis"
             )  # Use pop to remove it from kwargs
-            return XAxisTrack("Axis", "Axis", track_name, pd.DataFrame(), **kwargs)
+            return XAxisTrack(
+                "Axis",
+                "Axis",
+                track_name,
+                pd.DataFrame(),
+                track_options=track_options,
+                **kwargs,
+            )
         elif track_type == "spacer":
             track_name = kwargs.pop(
                 "track_name", "Spacer"
             )  # Use pop to remove it from kwargs
-            return SpacerTrack("Spacer", "Spacer", track_name, pd.DataFrame(), **kwargs)
+            return SpacerTrack(
+                "Spacer",
+                "Spacer",
+                track_name,
+                pd.DataFrame(),
+                track_options=track_options,
+                **kwargs,
+            )
 
         # For other track types, file_path is required
         if file_path is None:
@@ -63,7 +83,12 @@ class TrackFactory:
         # Load the data and create the track
         data = TrackFactory._load_data(file_path, track_type)
         return TrackFactory._create_track_with_data(
-            file_path, track_type, track_name, data, **kwargs
+            file_path,
+            track_type,
+            track_name,
+            data,
+            track_options=track_options,
+            **kwargs,
         )
 
     @staticmethod
@@ -145,8 +170,34 @@ class TrackFactory:
             raise NotImplementedError(f"Track type '{track_type}' is not supported")
 
     @staticmethod
+    def prepare_data(track_type: str, data: pd.DataFrame) -> pd.DataFrame:
+        """
+        Prepares data for a given track type ('bed', 'bedgraph').
+
+        Args:
+            track_type (str): The type of track ('bed', 'bedgraph').
+            data (pd.DataFrame): The input data.
+
+        Returns:
+            pd.DataFrame: The prepared data.
+        """
+        if track_type == "bed":
+            return TrackFactory._prepare_bed_data(data)
+        elif track_type == "bedgraph":
+            return TrackFactory._prepare_bedgraph_data(data)
+        else:
+            raise NotImplementedError(f"Track type '{track_type}' is not supported")
+
+    @staticmethod
     def _create_track_with_data(
-        file_path: str, track_type: str, track_name: str, data: pd.DataFrame, **kwargs
+        file_path: str,
+        track_type: str,
+        track_name: str,
+        data: pd.DataFrame,
+        subplot_x: int = 0,
+        subplot_y: int = 0,
+        track_options: dict[str, Any] = {},
+        show_legend: bool = False,
     ) -> GenomeTrack:
         """
         Creates a track with the loaded data.
@@ -161,21 +212,29 @@ class TrackFactory:
         Returns:
             GenomeTrack: The constructed track object.
         """
+
+        prepared_data = TrackFactory.prepare_data(track_type, data)
         if track_type == "bed":
             return BedTrack(
-                file_path,
-                track_type,
-                track_name,
-                TrackFactory._prepare_bed_data(data),
-                **kwargs,
+                file_path=file_path,
+                track_type=track_type,
+                track_name=track_name,
+                data=prepared_data,
+                track_options=track_options,
+                show_legend=show_legend,
+                subplot_x=subplot_x,
+                subplot_y=subplot_y,
             )
         elif track_type == "bedgraph":
             return BedGraphTrack(
-                file_path,
-                track_type,
-                track_name,
-                TrackFactory._prepare_bedgraph_data(data),
-                **kwargs,
+                file_path=file_path,
+                track_type=track_type,
+                track_name=track_name,
+                data=prepared_data,
+                track_options=track_options,
+                show_legend=show_legend,
+                subplot_x=subplot_x,
+                subplot_y=subplot_y,
             )
         else:
             raise NotImplementedError(f"Track type '{track_type}' is not supported")
@@ -252,31 +311,41 @@ class TrackUtils:
     """
 
     @staticmethod
-    def get_height_props(tracks: np.ndarray) -> list[float]:
+    def get_height_props(tracks: list[list[Any]]) -> list[float]:
         """
-        Computes the height proportions for the given tracks.
+        Computes the height proportions for the given tracks (list of lists).
 
         Args:
-            tracks (np.ndarray): Array of tracks.
+            tracks (list[list[Any]]): 2D list of tracks.
 
         Returns:
-            list[float]: List of height proportions for each track.
+            list[float]: List of height proportions for each track row.
         """
         return [
-            track.height_prop if track.height_prop is not None else 1
-            for track in tracks[:, 0]
-            if not track.share_with_previous
+            (
+                row[0].height_prop
+                if row[0] is not None
+                and hasattr(row[0], "height_prop")
+                and row[0].height_prop is not None
+                else 1
+            )
+            for row in tracks
+            if not (
+                row[0] is not None
+                and hasattr(row[0], "share_with_previous")
+                and row[0].share_with_previous
+            )
         ]
 
     @staticmethod
     def get_xlim_bedlim(
-        tracks: np.ndarray, column_region: str | None
+        column_tracks: Sequence[Any], column_region: str | None
     ) -> tuple[int, int, int]:
         """
-        Determines the x-axis limits and the maximum number of BED regions.
+        Determines the x-axis limits and the maximum number of BED regions for a list of tracks (column).
 
         Args:
-            tracks (np.ndarray): Array of tracks.
+            tracks (list[Any]): List of tracks (column).
             column_region (str | None): The genomic region.
 
         Returns:
@@ -284,15 +353,12 @@ class TrackUtils:
         """
         max_bed_regions = 0
         xmin = xmax = None
-
-        for track in tracks:
-            if track.data is None or track.data.empty:
+        for track in column_tracks:
+            if not hasattr(track, "data") or track.data is None or track.data.empty:
                 continue
-
             formatted_data = track.format_data(subset_region=column_region)
             if formatted_data.empty:
                 continue
-
             xmin = min(
                 xmin or formatted_data["chromStart"].min(),
                 formatted_data["chromStart"].min(),
@@ -303,43 +369,38 @@ class TrackUtils:
             )
             if isinstance(track, BedTrack):
                 max_bed_regions = max(max_bed_regions, formatted_data.shape[0])
-
         assert xmin is not None and xmax is not None, "No data available to plot."
         return xmin, xmax, max_bed_regions
 
     @staticmethod
-    def get_col_limits(
-        tracks_col: np.ndarray, column_region: str | None, relative_x_axis: bool
-    ) -> tuple[int, int, dict]:
+    def get_column_limits(
+        column_tracks: Sequence[Any],
+        region: Optional[str] = None,
+        relative_x_axis: bool = False,
+    ):
         """
-        Determines the x-axis limits and other options for a column of tracks.
+        Determines the x-axis limits and other options for a column of tracks (list).
 
         Args:
-            tracks_col (np.ndarray): A column of tracks.
-            column_region (str | None): Genomic region in 'chrom:start-end' format.
+            column_tracks: A column of tracks.
+            region (Optional[str]): Genomic region in 'chrom:start-end' format.
             relative_x_axis (bool): Whether the x-axis should start at 0.
 
         Returns:
             tuple[int, int, dict]: x-axis min, x-axis max, and a dictionary of additional options.
         """
-        extra_options = {}
         chromosome = (
-            column_region.split(":")[0]
-            if column_region
-            else tracks_col[0].data.iloc[0, 0]
+            region.split(":")[0]
+            if region
+            else (
+                column_tracks[0].data.iloc[0, 0]
+                if hasattr(column_tracks[0], "data") and not column_tracks[0].data.empty
+                else None
+            )
         )
-
-        extra_options.update({"chromosome": chromosome, "max_regions": 0})
-
-        xmin, xmax, max_bed_regions = TrackUtils.get_xlim_bedlim(
-            tracks_col, column_region
-        )
-        extra_options["max_regions"] = max_bed_regions
-
+        xmin, xmax, max_bed_regions = TrackUtils.get_xlim_bedlim(column_tracks, region)
+        axis_shift = 0
         if relative_x_axis:
-            extra_options["axis_shift"] = xmin - 1
+            axis_shift = xmin - 1
             xmax, xmin = xmax - xmin + 1, 0
-
-        extra_options["xmin"], extra_options["xmax"] = xmin, xmax
-
-        return xmin, xmax, extra_options
+        return chromosome, xmin, xmax, max_bed_regions, axis_shift

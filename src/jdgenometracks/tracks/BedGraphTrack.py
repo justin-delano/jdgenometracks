@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Iterable, Literal, Optional, Union
+from typing import Iterable, Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -17,7 +17,7 @@ ArrayLike_Type = Union[Iterable[Scalar_Type], np.ndarray]
 # Global dictionary for plot types and their specific functions for MPL and Plotly
 PLOT_TYPES = {
     "lines": {
-        "mpl": {"plot": Axes.plot, "fill": True},
+        "mpl": {"plot": Axes.plot, "fill": "tozeroy"},
         "plotly": {"plot": go.Scatter, "mode": "lines", "fill": "tozeroy"},
     },
     "bars": {
@@ -37,26 +37,16 @@ class BedGraphTrack(GenomeTrack):
     A class for plotting genomic tracks from bedGraph data using matplotlib or Plotly.
 
     Attributes:
-        ymin (Optional[float]): Minimum y-axis limit for the plot.
-        ymax (Optional[float]): Maximum y-axis limit for the plot.
-        plot_type (Literal): Type of plot ('lines', 'bars', 'points').
-        mpl_options (dict): Customization options for matplotlib plots.
         plotly_options (dict): Customization options for Plotly plots.
     """
 
-    ymin: Optional[float] = None
-    ymax: Optional[float] = None
-    plot_type: Literal["lines", "bars", "points"] = "lines"
-    mpl_plot_options: dict = field(default_factory=dict)
-    mpl_fill_options: dict = field(default_factory=dict)
-    plotly_options: dict = field(default_factory=dict)
+    track_options: dict = field(default_factory=dict)
 
     def __post_init__(self):
-        """Initializes the class and ensures the plot_type is valid."""
         super().__post_init__()
-        if self.plot_type not in PLOT_TYPES:
+        if self.track_options.get("plot.type") not in PLOT_TYPES:
             raise ValueError(
-                f"Invalid plot_type: {self.plot_type}. Must be one of {list(PLOT_TYPES.keys())}."
+                f"Invalid plot.type: {self.track_options.get('plot.type')}. Must be one of {list(PLOT_TYPES.keys())}."
             )
         if self.data is None:
             self.read_data()
@@ -108,7 +98,12 @@ class BedGraphTrack(GenomeTrack):
         """
         return (data["chromStart"] + data["chromEnd"]) / 2
 
-    def plot_mpl(self, ax: Axes, **kwargs):
+    def plot_mpl(
+        self,
+        ax: Axes,
+        subset_region: Optional[str] = None,
+        axis_shift: int = 0,
+    ):
         """
         Plots the genomic track using matplotlib.
 
@@ -122,8 +117,8 @@ class BedGraphTrack(GenomeTrack):
         Raises:
             ValueError: If no data is available for the selected region.
         """
-        subset_region = kwargs.get("subset_region", None)
-        axis_shift = kwargs.get("axis_shift", 0)
+        from jdgenometracks.option_mapping import translate
+
         cleaned_data = self.get_cleaned_data(
             subset_region=subset_region, axis_shift=axis_shift
         )
@@ -134,30 +129,40 @@ class BedGraphTrack(GenomeTrack):
         mid_points = self.calculate_mid_points(cleaned_data)
         y_values = cleaned_data["value"].astype(float)
 
-        plot_fn = PLOT_TYPES[self.plot_type]["mpl"]["plot"]
-        fill_between = PLOT_TYPES[self.plot_type]["mpl"].get("fill", False)
+        # Use unified options
+        mpl_opts = translate(self.track_options, target="mpl")
+        rect_opts = mpl_opts.get("marker", {})
+        fill_opts = mpl_opts.get("fill", {})
+        legend_opts = mpl_opts.get("legend", {})
+        plot_fn = PLOT_TYPES[self.track_options.get("plot.type", "lines")]["mpl"][
+            "plot"
+        ]
+        fill_between = PLOT_TYPES[self.track_options.get("plot.type", "lines")][
+            "mpl"
+        ].get("fill", False)
 
-        plot_fn(
-            ax, mid_points, y_values, label=self.track_name, **self.mpl_plot_options
-        )
+        plot_fn(ax, mid_points, y_values, label=self.track_name, **rect_opts)
         if fill_between:
-            ax.fill_between(mid_points, y_values, 0, **self.mpl_fill_options)  # type: ignore
-
-        # Set y-axis limits
-        ymin = kwargs.get("ymin", self.ymin)
-        ymax = kwargs.get("ymax", self.ymax)
+            ax.fill_between(mid_points, y_values, 0, **fill_opts)  # type: ignore
+        ymin = self.track_options.get("ymin", None)
+        ymax = self.track_options.get("ymax", None)
         if ymin is not None:
             ax.set_ylim(bottom=ymin)
         if ymax is not None:
             ax.set_ylim(top=ymax)
-
-        # Customize appearance
         ax.spines["bottom"].set_visible(False)
         ax.xaxis.set_tick_params(bottom=False)
         if self.show_legend:
-            ax.legend()
+            ax.legend(**legend_opts)
 
-    def plot_plotly(self, fig: go.Figure, row: int, col: int, **kwargs):
+    def plot_plotly(
+        self,
+        fig: go.Figure,
+        row: int,
+        col: int,
+        subset_region: Optional[str] = None,
+        axis_shift: int = 0,
+    ):
         """
         Plots the genomic track using Plotly.
 
@@ -171,8 +176,8 @@ class BedGraphTrack(GenomeTrack):
         Raises:
             ValueError: If no data is available for the selected region.
         """
-        subset_region = kwargs.get("subset_region", None)
-        axis_shift = kwargs.get("axis_shift", 0)
+        from jdgenometracks.option_mapping import translate
+
         cleaned_data = self.get_cleaned_data(
             subset_region=subset_region, axis_shift=axis_shift
         )
@@ -183,17 +188,31 @@ class BedGraphTrack(GenomeTrack):
         mid_points = self.calculate_mid_points(cleaned_data)
         y_values = cleaned_data["value"]
 
-        plot_fn = PLOT_TYPES[self.plot_type]["plotly"]["plot"]
-        plot_mode = PLOT_TYPES[self.plot_type]["plotly"].get("mode")
-        fill_area = PLOT_TYPES[self.plot_type]["plotly"].get("fill")
-
-        if self.plot_type == "bars":
+        # Use unified options
+        plotly_opts = translate(self.track_options, target="plotly")
+        marker_opts = plotly_opts.get("marker", {})
+        fill_opts = plotly_opts.get("fill", {})
+        legend_opts = plotly_opts.get("legend", {})
+        xaxis_opts = plotly_opts.get("xaxis", {})
+        yaxis_opts = plotly_opts.get("yaxis", {})
+        plot_fn = PLOT_TYPES[self.track_options.get("plot.type", "lines")]["plotly"][
+            "plot"
+        ]
+        plot_mode = PLOT_TYPES[self.track_options.get("plot.type", "lines")][
+            "plotly"
+        ].get("mode")
+        fill_area = PLOT_TYPES[self.track_options.get("plot.type", "lines")][
+            "plotly"
+        ].get("fill")
+        plot_type = self.track_options.get("plot.type", "lines")
+        if plot_type == "bars":
             trace = plot_fn(
                 x=mid_points,
                 y=y_values,
                 name=self.track_name,
                 showlegend=self.show_legend,
-                **self.plotly_options,
+                marker=marker_opts,
+                **legend_opts,
             )
             fig.update_layout(bargap=0)
         else:
@@ -204,15 +223,14 @@ class BedGraphTrack(GenomeTrack):
                 fill=fill_area,
                 name=self.track_name,
                 showlegend=self.show_legend,
-                **self.plotly_options,
+                marker=marker_opts,
+                **fill_opts,
+                **legend_opts,
             )
-
         fig.add_trace(trace, row=row, col=col)
-        fig.update_xaxes(showline=False, row=row, col=col)
-        fig.update_yaxes(linecolor="black", row=row, col=col)
-
-        # Set y-axis limits
-        ymin = kwargs.get("ymin", self.ymin)
-        ymax = kwargs.get("ymax", self.ymax)
+        fig.update_xaxes(showline=False, row=row, col=col, **xaxis_opts)
+        fig.update_yaxes(linecolor="black", row=row, col=col, **yaxis_opts)
+        ymin = self.track_options.get("ymin", None)
+        ymax = self.track_options.get("ymax", None)
         if ymin is not None or ymax is not None:
             fig.update_yaxes(range=[ymin, ymax], row=row, col=col)

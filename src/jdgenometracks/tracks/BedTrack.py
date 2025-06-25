@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Literal, Optional
 
 import numpy as np
 import pandas as pd
@@ -8,6 +8,8 @@ import scipy.sparse as sp
 from matplotlib.axes import Axes
 from matplotlib.patches import Rectangle
 
+from jdgenometracks.option_mapping import translate
+
 from .GenomeTrack import GenomeTrack
 
 
@@ -15,33 +17,11 @@ from .GenomeTrack import GenomeTrack
 class BedTrack(GenomeTrack):
     """
     A class for plotting genomic regions from BED files using matplotlib or Plotly.
-
-    Attributes:
-        rect_height (float): Height of each rectangle representing a region.
-        rect_padding (float): Padding around the rectangles.
-        use_global_max (bool): Whether to use global maximum coverage for the y-axis.
-        use_color_column (bool): Whether to color rectangles based on a column in the BED file.
-        mpl_rect_options (dict): Matplotlib options for rectangles.
-        mpl_text_options (dict): Matplotlib options for text labels.
-        plotly_options (dict): Plotly options for the plotting traces.
-        plotly_text_options (dict): Plotly options for text labels.
-        label_alignment (Literal["left", "above", "right", False]): Alignment of text labels.
     """
 
-    rect_height: float = 1
-    rect_padding: float = 0
-    use_global_max: bool = False
-    use_color_column: bool = False
-
-    mpl_rect_options: dict = field(default_factory=dict)
-    mpl_text_options: dict = field(default_factory=dict)
-
-    plotly_plot_options: dict = field(default_factory=dict)
-    plotly_text_options: dict = field(default_factory=dict)
-    label_alignment: Literal["left", "above", "right", False] = False
+    track_options: dict = field(default_factory=dict)
 
     def __post_init__(self):
-        """Ensures data is loaded during initialization."""
         super().__post_init__()
         if self.data is None:
             self.read_data()
@@ -76,19 +56,16 @@ class BedTrack(GenomeTrack):
         data.columns = possible_bed_columns[: len(data.columns)]
         self.data = self.set_df_col_dtype(data)
 
-    def get_subset_region_start(self, subset_region: str, **kwargs) -> int:
+    def get_subset_region_start(self, subset_region: Optional[str], **kwargs) -> int:
         """
         Extracts the start position from the subset region, or returns the minimum x value.
 
         Args:
-            subset_region (str): Region in "chrom:start-end" format.
+            subset_region (Optional[str]): Region in "chrom:start-end" format.
 
         Returns:
             int: The starting position of the region.
         """
-        if subset_region is not None:
-            return int(subset_region.split(":")[1].split("-")[0])
-        return kwargs.get("xmin", 0)
 
     def update_coverage(
         self, region, subset_region_start, bed_region_coverage, y
@@ -113,12 +90,17 @@ class BedTrack(GenomeTrack):
                 region["chromEnd"] - subset_region_start, bed_region_coverage.shape[1]
             )
             + 1,
-        ] = (
-            y + self.rect_height
-        )
+        ] = y + self.track_options.get("rect.height", 1)
         return bed_region_coverage.maximum(sp.csr_matrix(new_coverage))
 
-    def plot_mpl(self, ax: Axes, **kwargs):
+    def plot_mpl(
+        self,
+        ax: Axes,
+        bed_region_coverage: np.ndarray,
+        subset_region: Optional[str] = None,
+        axis_shift: Optional[int] = None,
+        xmin: Optional[int] = None,
+    ):
         """
         Plots the BED data using matplotlib. Draws rectangles for genomic regions.
 
@@ -131,23 +113,27 @@ class BedTrack(GenomeTrack):
         Returns:
             np.ndarray: The updated coverage matrix after plotting.
         """
-        bed_region_coverage = kwargs.get("bed_region_coverage", np.zeros((1, 100)))
-        subset_region = kwargs.get("subset_region", None)
-        subset_region_start = self.get_subset_region_start(subset_region, **kwargs)
-        axis_shift = kwargs.get("axis_shift", 0)
+        if subset_region is not None:
+            subset_region_start = int(subset_region.split(":")[1].split("-")[0])
+        else:
+            subset_region_start = xmin or 0
 
         cleaned_data = self.format_data(
             subset_region=subset_region, axis_shift=axis_shift
         )
 
+        # Use unified options
+        mpl_opts = translate(self.track_options, target="mpl")
+        rect_opts = mpl_opts.get("marker", {})
+        text_opts = mpl_opts.get("text", {})
+        legend_opts = mpl_opts.get("legend", {})
         for idx, region in cleaned_data.iterrows():
-            # Set color if itemRGB is present and use_color_column is enabled
-            if "itemRGB" in region and self.use_color_column:
-                self.mpl_rect_options["color"] = [
+            if "itemRGB" in region and self.track_options.get(
+                "use_color_column", False
+            ):
+                rect_opts["color"] = [
                     int(val) / 255 for val in region["itemRGB"].split(",")
                 ]
-
-            # Calculate y-position from bed_region_coverage
             try:
                 y = bed_region_coverage[
                     0,
@@ -160,65 +146,63 @@ class BedTrack(GenomeTrack):
                 ].max()
             except ValueError:
                 y = 0
-
-            # Add rectangle patch
+            rect_height = self.track_options.get("rect.height", 1)
+            rect_padding = self.track_options.get("rect.padding", 0)
             region_rect = Rectangle(
-                (region["chromStart"], y + self.rect_padding),
+                (region["chromStart"], y + rect_padding),
                 region["chromEnd"] - region["chromStart"],
-                self.rect_height - 2 * self.rect_padding,
+                rect_height - 2 * rect_padding,
                 label=region["name"],
-                **self.mpl_rect_options,
+                **rect_opts,
             )
             ax.add_patch(region_rect)
-
-            # Add text label
-            if self.label_alignment == "above":
+            label_alignment = self.track_options.get("label.alignment", False)
+            if label_alignment == "above":
                 ax.text(
                     (region["chromEnd"] + region["chromStart"]) / 2,
-                    y + self.rect_height + self.rect_padding,
+                    y + rect_height + rect_padding,
                     region["name"],
-                    **self.mpl_text_options,
+                    **text_opts,
                 )
-            elif self.label_alignment == "left":
+            elif label_alignment == "left":
                 ax.text(
                     region["chromStart"],
-                    y + self.rect_height / 2,
+                    y + rect_height / 2,
                     region["name"],
-                    **self.mpl_text_options,
+                    **text_opts,
                 )
-            elif self.label_alignment == "right":
+            elif label_alignment == "right":
                 ax.text(
                     region["chromEnd"],
-                    y + self.rect_height / 2,
+                    y + rect_height / 2,
                     region["name"],
-                    **self.mpl_text_options,
+                    **text_opts,
                 )
-
-            # Update coverage
             bed_region_coverage = self.update_coverage(
                 region, subset_region_start, bed_region_coverage, y
             )
-
         ax.xaxis.set_tick_params(bottom=False)
         ax.yaxis.set_tick_params(left=False, labelleft=False)
         ax.spines["left"].set_visible(False)
         ax.spines["bottom"].set_visible(False)
-
-        # if self.use_global_max:
-        if self.use_global_max:
-            ax.set_ylim(
-                0, bed_region_coverage.max() * 1.1
-            )  # Force the y-limit to the calculated maximum
+        if self.track_options.get("use_global_max", False):
+            ax.set_ylim(0, bed_region_coverage.max() * 1.1)
         else:
-            ax.autoscale(
-                enable=True, axis="y"
-            )  # Let Matplotlib auto-scale if use_global_max is False
+            ax.autoscale(enable=True, axis="y")
         if self.show_legend:
-            ax.legend()
-
+            ax.legend(**legend_opts)
         return bed_region_coverage
 
-    def plot_plotly(self, fig: go.Figure, row: int, col: int, **kwargs):
+    def plot_plotly(
+        self,
+        fig: go.Figure,
+        row: int,
+        col: int,
+        bed_region_coverage: np.ndarray,
+        subset_region: Optional[str] = None,
+        axis_shift: Optional[int] = None,
+        xmin: Optional[int] = None,
+    ):
         """
         Plots the BED data using Plotly. Draws filled polygons for genomic regions.
 
@@ -233,21 +217,28 @@ class BedTrack(GenomeTrack):
         Returns:
             np.ndarray: The updated coverage matrix after plotting.
         """
-        bed_region_coverage = kwargs.get("bed_region_coverage", np.zeros((1, 100)))
-        subset_region = kwargs.get("subset_region", None)
-        subset_region_start = self.get_subset_region_start(subset_region, **kwargs)
-        axis_shift = kwargs.get("axis_shift", 0)
+        if subset_region is not None:
+            subset_region_start = int(subset_region.split(":")[1].split("-")[0])
+        else:
+            subset_region_start = xmin or 0
 
         cleaned_data = self.format_data(
             subset_region=subset_region, axis_shift=axis_shift
         )
 
+        plotly_opts = translate(self.track_options, target="plotly")
+        marker_opts = plotly_opts.get("marker", {})
+        fill_opts = plotly_opts.get("fill", {})
+        text_opts = plotly_opts.get("text", {})
+        legend_opts = plotly_opts.get("legend", {})
+        line_opts = plotly_opts.get("line", {})
+        xaxis_opts = plotly_opts.get("xaxis", {})
+        yaxis_opts = plotly_opts.get("yaxis", {})
         for idx, region in cleaned_data.iterrows():
-            # Set color if itemRGB is present and use_color_column is enabled'
-            if "itemRGB" in region and self.use_color_column:
-                self.plotly_plot_options["fillcolor"] = f"rgb({region['itemRGB']})"
-
-            # Calculate y-position from bed_region_coverage
+            if "itemRGB" in region and self.track_options.get(
+                "use_color_column", False
+            ):
+                fill_opts["fillcolor"] = f"rgb({region['itemRGB']})"
             try:
                 y = bed_region_coverage[
                     0,
@@ -260,8 +251,8 @@ class BedTrack(GenomeTrack):
                 ].max()
             except ValueError:
                 y = 0
-
-            # Add polygon trace
+            rect_height = self.track_options.get("rect.height", 1)
+            rect_padding = self.track_options.get("rect.padding", 0)
             fig.add_trace(
                 go.Scatter(
                     x=[
@@ -272,75 +263,74 @@ class BedTrack(GenomeTrack):
                         region["chromStart"],
                     ],
                     y=[
-                        y + self.rect_padding,
-                        y + self.rect_height - 2 * self.rect_padding,
-                        y + self.rect_height - 2 * self.rect_padding,
-                        y + self.rect_padding,
-                        y + self.rect_padding,
+                        y + rect_padding,
+                        y + rect_height - 2 * rect_padding,
+                        y + rect_height - 2 * rect_padding,
+                        y + rect_padding,
+                        y + rect_padding,
                     ],
                     mode="lines",
                     fill="toself",
                     showlegend=self.show_legend,
                     name=region["name"],
-                    **self.plotly_plot_options,
+                    **marker_opts,
+                    **legend_opts,
+                    **fill_opts,
+                    line=line_opts,
                 ),
                 row=row,
                 col=col,
             )
-
-            # add annotation to side of rectangle
-            if self.label_alignment == "above":
+            label_alignment = self.track_options.get("label_alignment", False)
+            if label_alignment == "above":
                 fig.add_annotation(
                     x=(region["chromEnd"] + region["chromStart"]) / 2,
-                    y=y + self.rect_height - self.rect_padding,
+                    y=y + rect_height - rect_padding,
                     text=region["name"],
                     xanchor="center",
                     yanchor="bottom",
                     showarrow=False,
                     row=row,
                     col=col,
-                    **self.plotly_text_options,
+                    **text_opts,
                 )
-            elif self.label_alignment == "left":
+            elif label_alignment == "left":
                 fig.add_annotation(
                     x=region["chromStart"],
-                    y=y + self.rect_height / 2,
+                    y=y + rect_height / 2,
                     text=region["name"],
                     xanchor="right",
                     yanchor="middle",
                     showarrow=False,
                     row=row,
                     col=col,
-                    **self.plotly_text_options,
+                    **text_opts,
                 )
-            elif self.label_alignment == "right":
+            elif label_alignment == "right":
                 fig.add_annotation(
                     x=region["chromEnd"],
-                    y=y + self.rect_height / 2,
+                    y=y + rect_height / 2,
                     text=region["name"],
                     xanchor="left",
                     yanchor="middle",
                     showarrow=False,
                     row=row,
                     col=col,
-                    **self.plotly_text_options,
+                    **text_opts,
                 )
-
-            # Update coverage
             bed_region_coverage = self.update_coverage(
                 region, subset_region_start, bed_region_coverage, y
             )
 
-        if "showticklabels" not in self.plotly_yaxis_options:
-            fig.update_yaxes(
-                showticklabels=False, row=row, col=col, **self.plotly_yaxis_options
-            )
-        else:
-            fig.update_yaxes(row=row, col=col, **self.plotly_yaxis_options)
-
-        if self.use_global_max:
+        fig.update_xaxes(row=row, col=col, **xaxis_opts)
+        if self.track_options.get("use_global_max", False):
             fig.update_yaxes(
                 range=[0, bed_region_coverage.max() * 1.1], row=row, col=col
             )
-
+        fig.update_yaxes(
+            row=row,
+            col=col,
+            showticklabels=False,
+            **yaxis_opts,
+        )
         return bed_region_coverage

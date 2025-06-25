@@ -1,11 +1,13 @@
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from matplotlib.axes import Axes
 from matplotlib.ticker import Formatter
+
+from jdgenometracks.option_mapping import translate
 
 from .GenomeTrack import GenomeTrack
 
@@ -113,10 +115,7 @@ class XAxisTrack(GenomeTrack):
         height_prop (float): Proportion of the height of the axis.
     """
 
-    axis_type: str = "verbose"
-    verbose_label: bool = True
-    font_size: int = 12
-    height_prop: float = 0.01
+    track_options: dict = field(default_factory=dict)
 
     def __post_init__(self):
         """Initialize an empty DataFrame for this track."""
@@ -138,11 +137,14 @@ class XAxisTrack(GenomeTrack):
         ax.yaxis.set_tick_params(left=False, right=False, labelleft=False)
         ax.xaxis.set_visible(True)
         ax.xaxis.set_major_formatter(BPFormatter())
-        ax.xaxis.set_tick_params(
-            bottom=True, labelsize=self.font_size, labelbottom=True
-        )
 
-        ax.set_xlabel(chromosome if self.verbose_label else "", fontsize=self.font_size)
+        mpl_opts = translate(self.track_options, target="mpl")
+        text_opts = mpl_opts.get("text", {})
+        ax.xaxis.set_tick_params(bottom=True, labelbottom=True, **text_opts)
+        ax.set_xlabel(
+            chromosome if self.track_options.get("axis.show_chromosome", True) else "",
+            **text_opts,
+        )
 
     def plot_mpl(self, ax: Axes, chromosome: str, **kwargs):
         """
@@ -152,11 +154,11 @@ class XAxisTrack(GenomeTrack):
             ax (Axes): The matplotlib axis to plot on.
             chromosome (str): The chromosome label.
         """
-        if self.axis_type == "verbose":
+        if self.track_options.get("axis.type") == "verbose":
             self.add_verbose_axis_mpl(ax, chromosome)
         else:
             raise NotImplementedError(
-                f"Axis type '{self.axis_type}' is not implemented."
+                f"Axis type '{self.track_options.get('axis.type')}' is not implemented."
             )
 
     def add_verbose_axis_plotly(
@@ -171,17 +173,25 @@ class XAxisTrack(GenomeTrack):
             col (int): The column number in the subplot grid.
             chromosome (str): The chromosome label to display.
         """
+        plotly_opts = translate(self.track_options, target="plotly")
+        line_opts = plotly_opts.get("line", {})
+        xaxis_opts = plotly_opts.get("xaxis", {})
+        yaxis_opts = plotly_opts.get("yaxis", {})
         fig.add_trace(go.Scatter(x=[], y=[], showlegend=False), row=row, col=col)
-
         fig.update_xaxes(
-            title_text=chromosome if self.verbose_label else "",
-            linecolor="black",
+            title_text=(
+                chromosome
+                if self.track_options.get("axis.show_chromosome", True)
+                else ""
+            ),
             showticklabels=True,
             tickangle=0,
             row=row,
             col=col,
+            **xaxis_opts,
+            **line_opts,
         )
-        fig.update_yaxes(showticklabels=False, row=row, col=col)
+        fig.update_yaxes(showticklabels=False, row=row, col=col, **yaxis_opts)
 
     def plot_plotly(
         self, fig: go.Figure, row: int, col: int, chromosome: str, **kwargs
@@ -195,9 +205,9 @@ class XAxisTrack(GenomeTrack):
             col (int): The column number in the subplot grid.
             chromosome (str): The chromosome label.
         """
-        if self.axis_type == "verbose":
+        if self.track_options.get("axis.type") == "verbose":
             self.add_verbose_axis_plotly(fig, row, col, chromosome)
         else:
             raise NotImplementedError(
-                f"Axis type '{self.axis_type}' is not implemented."
+                f"Axis type '{self.track_options.get('axis.type')}' is not implemented."
             )

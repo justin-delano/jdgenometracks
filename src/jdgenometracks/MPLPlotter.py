@@ -1,16 +1,18 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any, Dict, Optional, Sequence
 
 import matplotlib.figure
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.sparse as sp
-from matplotlib.axes import Axes
+
+from jdgenometracks.tracks import XAxisTrack
 
 from .tracks.BedTrack import BedTrack
-from .tracks.GenomeTrack import GenomeTrack
 from .utils import TrackUtils
+from .utils_units import convert_to_inches, parse_size_with_units
 
 
 @dataclass
@@ -19,236 +21,181 @@ class MPLPlotter:
     A class for generating multi-track genomic plots using Matplotlib.
 
     Attributes:
-        tracks (np.ndarray): Array of GenomeTrack or its subclasses to be plotted.
+        tracks (Sequence[Sequence[Sequence[Any]]]): 2D grid of subplots, each containing a sequence of tracks.
         total_height (float): Total height of the plot figure in inches.
+        total_width (float): Total width of the plot figure in inches.
     """
 
-    tracks: np.ndarray
-    total_height: float
-    total_width: float
+    tracks: Sequence[Any]
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """
-        Ensures tracks are stored as a numpy array for consistency and validates input types.
+        Ensures tracks are stored as a grid and validates input types.
         """
-        if not isinstance(self.tracks, (list, np.ndarray)):
-            raise TypeError(
-                f"tracks must be a list or numpy array, got {type(self.tracks)}"
-            )
-        self.tracks = np.array(self.tracks)
-        if self.tracks.size == 0:
-            raise ValueError("tracks array cannot be empty.")
-        for t in self.tracks.flatten():
-            if t is not None and not hasattr(t, "plot_mpl"):
+        if not isinstance(self.tracks, (list, tuple)):
+            raise TypeError(f"Tracks must be a list or tuple, got {type(self.tracks)}.")
+        if len(self.tracks) == 0:
+            raise ValueError("Tracks cannot be empty.")
+        for track in self.tracks:
+            if track is not None and not hasattr(track, "plot_mpl"):
                 raise TypeError(
-                    f"Each track must have a 'plot_mpl' method (got {type(t)})."
+                    f"Each track must have a 'plot_mpl' method (got {type(track)})."
                 )
-        if not isinstance(self.total_height, (int, float)) or self.total_height <= 0:
-            raise ValueError("total_height must be a positive number.")
-        if not isinstance(self.total_width, (int, float)) or self.total_width <= 0:
-            raise ValueError("total_width must be a positive number.")
-
-    def plot_single_track(
-        self, subplot: Axes, track: GenomeTrack, **kwargs
-    ) -> np.ndarray | None:
-        """
-        Plots a single track on a subplot.
-
-        Args:
-            subplot (Axes): The matplotlib subplot to plot on.
-            track (GenomeTrack): The genomic track to plot.
-            **kwargs: Additional keyword arguments to pass to the plot method.
-
-        Returns:
-            sp.spmatrix | None: Bed region coverage if applicable, otherwise None.
-        """
-        if isinstance(track, BedTrack):
-            bed_region_coverage = track.plot_mpl(subplot, **kwargs)
-        else:
-            track.plot_mpl(subplot, **kwargs)
-            bed_region_coverage = None
-
-        track.add_hlines_mpl(subplot)
-        subplot.spines["top"].set_visible(False)
-        subplot.spines["right"].set_visible(False)
-        return bed_region_coverage
 
     def _validate_inputs(
         self,
-        height_props: list[float],
-        row_titles: list[str],
-        width_props: list[float],
-        column_titles: list[str],
+        max_rows: int,
+        max_cols: int,
+        height_props: Sequence[float],
+        row_titles: Sequence[str],
+        width_props: Sequence[float],
+        column_titles: Sequence[str],
     ) -> None:
-        """
-        Validates the inputs for the plot, ensuring the lengths match the expected dimensions.
-
-        Args:
-            height_props (list[float]): Proportions of the figure height for each row.
-            row_titles (list[str]): Titles for each row in the figure.
-            width_props (list[float]): Proportions of the figure width for each column.
-            column_titles (list[str]): Titles for each column in the figure.
-
-        Raises:
-            AssertionError: If the lengths of inputs don't match the expected number of rows or columns.
-        """
-        num_distinct_rows = sum(
-            [not track.share_with_previous for track in self.tracks[:, 0]]
-        )
-
         assert (
-            len(height_props) == num_distinct_rows
-        ), f"Number of height_props should equal {num_distinct_rows}"
+            len(height_props) == max_rows
+        ), f"Number of height_props should equal {max_rows}"
         assert (
-            len(row_titles) == num_distinct_rows
-        ), f"Number of row_titles should equal {num_distinct_rows}"
+            len(row_titles) == max_rows
+        ), f"Number of row_titles should equal {max_rows}"
         assert (
-            len(width_props) == self.tracks.shape[1]
-        ), f"Number of width_props should equal {self.tracks.shape[1]}"
+            len(width_props) == max_cols
+        ), f"Number of width_props should equal {max_cols}"
         assert (
-            len(column_titles) == self.tracks.shape[1]
-        ), f"Number of column_titles should equal {self.tracks.shape[1]}"
+            len(column_titles) == max_cols
+        ), f"Number of column_titles should equal {max_cols}"
 
     def _set_subplot_titles(
-        self, subplots: np.ndarray, column_titles: list[str], row_titles: list[str]
+        self,
+        subplots: Any,  # np.ndarray, but numpy not imported at top level
+        column_titles: Sequence[str],
+        row_titles: Sequence[str],
     ) -> None:
-        """
-        Sets the titles for the rows and columns of the subplots.
 
-        Args:
-            subplots (np.ndarray): The array of subplots.
-            column_titles (list[str]): The titles for the columns.
-            row_titles (list[str]): The titles for the rows.
-        """
-        for col_idx, title in enumerate(column_titles or []):
+        for col_idx, title in enumerate(column_titles):
             subplots[0, col_idx].set_title(title)
-
-        for row_idx, title in enumerate(row_titles or []):
+        for row_idx, title in enumerate(row_titles):
             subplots[row_idx, 0].set_ylabel(title)
 
     def plot_all_tracks(
         self,
-        plot_title: str | None = None,
-        column_regions: list[str | None] | None = None,
-        total_height: float | None = None,
-        total_width: float | None = None,
-        height_props: list[float] | None = None,
-        row_titles: list[str] | None = None,
-        width_props: list[float] | None = None,
-        column_titles: list[str] | None = None,
-        relative_x_axis: bool = False,
-        show_fig: bool = False,
-    ) -> tuple[matplotlib.figure.Figure, np.ndarray]:
+        fig_options: Optional[Dict[str, Any]] = None,
+    ) -> tuple[
+        matplotlib.figure.Figure, Any
+    ]:  # np.ndarray, but numpy not imported at top level
         """
         Plots all tracks in a single matplotlib figure.
-
-        Args:
-            plot_title (str | None): Title for the entire plot.
-            column_regions (list[str | None] | None): Genomic regions for subsetting in each column.
-            total_height (float | None): Total figure height in inches.
-            height_props (list[float] | None): Proportions of figure height used by each track.
-            row_titles (list[str] | None): Titles for each track row.
-            width_props (list[float] | None): Proportions of figure width used by each column.
-            column_titles (list[str] | None): Titles for each track column.
-            relative_x_axis (bool): If True, x-axes start at 0bp.
-            show_fig (bool): If True, display the figure.
-
-        Returns:
-            tuple[matplotlib.figure.Figure, np.ndarray]: The matplotlib figure and the subplots array.
         """
-        # Reshape tracks if they are a 1D array
-        if self.tracks.ndim == 1:
-            self.tracks = self.tracks.reshape(-1, 1)
+        if fig_options is None:
+            fig_options = {}
 
-        # Default column regions to None
-        if column_regions is None:
-            column_regions = [None for _ in range(self.tracks.shape[1])]
-
-        # Calculate number of distinct rows (tracks not sharing axes with the previous row)
-        num_distinct_rows = sum(
-            [not track.share_with_previous for track in self.tracks[:, 0]]
+        max_rows = max(track.subplot_y for track in self.tracks) + 1
+        max_cols = max(track.subplot_x for track in self.tracks) + 1
+        column_regions = fig_options.get(
+            "column_regions", [None for _ in range(max_cols)]
         )
 
-        # Default layout properties
-        height_props = height_props or TrackUtils.get_height_props(self.tracks)
-        row_titles = row_titles or [""] * num_distinct_rows
-        width_props = width_props or [
-            1 / self.tracks.shape[1] for _ in range(self.tracks.shape[1])
-        ]
-        column_titles = column_titles or ["" for _ in range(self.tracks.shape[1])]
-        total_height = total_height or self.total_height
-        total_width = total_width or self.total_width
-
-        # Validate inputs
-        self._validate_inputs(height_props, row_titles, width_props, column_titles)
-
-        # Create figure and subplots
-        fig, axes = plt.subplots(
-            num_distinct_rows,
-            self.tracks.shape[1],
-            figsize=(total_width, total_height),
-            sharex="col",
-            gridspec_kw={
-                "height_ratios": height_props,
-                "width_ratios": width_props,
-            },
-            layout="constrained",
-        )
-
-        # Ensure subplots is always a 2D array
-        axes = np.atleast_2d(axes).T
-
-        # Set row and column titles
-        self._set_subplot_titles(axes, column_titles, row_titles)
-
-        # Set plot title if provided
-        if plot_title:
-            fig.suptitle(plot_title, fontsize=16)
-
-        # Plot each track in the subplots
-        for data_col in range(self.tracks.shape[1]):
-            plot_row = 0
-
-            xmin, xmax, extra_options = TrackUtils.get_col_limits(
-                self.tracks[:, data_col], column_regions[data_col], relative_x_axis
+        if (
+            not isinstance(column_regions, (list, tuple))
+            or len(column_regions) != max_cols
+        ):
+            raise ValueError(
+                "column_regions must be a list/tuple with length equal to number of columns in tracks."
             )
 
-            # Initialize bed region coverage for BedTracks
-            bed_region_coverage = sp.csr_matrix((1, xmax - xmin))
+        height_props = fig_options.get("height_props", [1 for _ in range(max_rows)])
+        row_titles = fig_options.get("row_titles", ["" for _ in range(max_rows)])
+        width_props = fig_options.get("width_props", [1 for _ in range(max_cols)])
+        column_titles = fig_options.get("column_titles", ["" for _ in range(max_cols)])
+        total_height = fig_options.get("total_height", None)
+        total_width = fig_options.get("total_width", None)
+        plot_title = fig_options.get("plot_title", None)
+        relative_x_axis = fig_options.get("relative_x_axis", False)
 
-            for data_row in range(self.tracks.shape[0]):
-                track = self.tracks[data_row, data_col]
+        self._validate_inputs(
+            max_rows, max_cols, height_props, row_titles, width_props, column_titles
+        )
+        column_limits = []
+        for column in range(max_cols):
+            col_tracks = [
+                track
+                for track in self.tracks
+                if track is not None and track.subplot_x == column
+            ]
+            chromosome, xmin, xmax, max_bed_regions, axis_shift = (
+                TrackUtils.get_column_limits(
+                    col_tracks, column_regions[column], relative_x_axis
+                )
+            )
+            column_limits.append(
+                {
+                    "chromosome": chromosome,
+                    "xmin": xmin,
+                    "xmax": xmax,
+                    "max_bed_regions": max_bed_regions,
+                    "axis_shift": axis_shift,
+                }
+            )
+        bed_region_coverages = [
+            sp.csr_matrix((1, column["xmax"] - column["xmin"]))
+            for column in column_limits
+        ]
 
-                if track is None:
-                    continue
+        try:
+            fig, axes = plt.subplots(
+                max_rows,
+                max_cols,
+                figsize=(total_width, total_height),
+                sharex="col",
+                gridspec_kw={
+                    "height_ratios": height_props,
+                    "width_ratios": width_props,
+                },
+                layout="constrained",
+            )
+        except Exception as e:
+            raise RuntimeError(f"Error creating subplots: {e}")
 
-                # If the track shares its x-axis with the previous track, adjust row index
-                if track.share_with_previous:
-                    plot_row -= 1
-                else:
-                    bed_region_coverage = sp.csr_matrix((1, xmax - xmin))
+        axes = np.atleast_2d(axes).T
 
-                # Plot BedTrack with bed region coverage
+        self._set_subplot_titles(axes, column_titles, row_titles)
+        if plot_title:
+            fig.suptitle(
+                str(plot_title), fontsize=fig_options.get("suptitle.fontsize", 16)
+            )
+        for track in self.tracks:
+            if track is None:
+                continue
+            if not hasattr(track, "plot_mpl"):
+                raise TypeError(f"Track {track} does not have a 'plot_mpl' method.")
+            try:
                 if isinstance(track, BedTrack):
-                    extra_options["bed_region_coverage"] = bed_region_coverage
-                    bed_region_coverage = self.plot_single_track(
-                        axes[plot_row, data_col],
-                        track,
-                        region=column_regions[data_col],
-                        **extra_options,
+                    bed_region_coverages[track.subplot_x] = track.plot_mpl(
+                        axes[track.subplot_y, track.subplot_x],
+                        bed_region_coverages[track.subplot_x],
+                        subset_region=column_regions[track.subplot_x],
+                        xmin=column_limits[track.subplot_x]["xmin"],
+                    )
+                elif isinstance(track, XAxisTrack):
+                    track.plot_mpl(
+                        axes[track.subplot_y, track.subplot_x],
+                        chromosome=column_limits[track.subplot_x]["chromosome"],
                     )
                 else:
-                    self.plot_single_track(
-                        axes[plot_row, data_col],
-                        track,
-                        region=column_regions[data_col],
-                        **extra_options,
+                    track.plot_mpl(
+                        axes[track.subplot_y, track.subplot_x],
+                        subset_region=column_regions[track.subplot_x],
                     )
-                axes[plot_row, data_col].set_xlim(xmin, xmax)
-                plot_row += 1
-
-        # Show the figure if required
-        if show_fig:
-            fig.show()
-
+                axes[track.subplot_y, track.subplot_x].set_xlim(
+                    column_limits[track.subplot_x]["xmin"],
+                    column_limits[track.subplot_x]["xmax"],
+                )
+                track.add_hlines_mpl(axes[track.subplot_y, track.subplot_x])
+                axes[track.subplot_y, track.subplot_x].spines["top"].set_visible(False)
+                axes[track.subplot_y, track.subplot_x].spines["right"].set_visible(
+                    False
+                )
+            except Exception as e:
+                raise RuntimeError(
+                    f"Error plotting track at grid ({track.subplot_y},{track.subplot_x}): {e}"
+                )
         return fig, axes

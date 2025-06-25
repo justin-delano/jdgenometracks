@@ -7,9 +7,12 @@ import plotly.graph_objects as go
 import plotly.subplots as ps
 import scipy.sparse as sp
 
+from jdgenometracks.tracks import XAxisTrack
+
 from .tracks.BedTrack import BedTrack
 from .tracks.GenomeTrack import GenomeTrack
 from .utils import TrackUtils
+from .utils_units import convert_to_pixels, parse_size_with_units
 
 
 @dataclass
@@ -22,66 +25,12 @@ class PlotlyPlotter:
         total_height (float): The total height of the figure in inches.
     """
 
-    tracks: np.ndarray
-    total_height: float
-    total_width: float
-
-    def __post_init__(self):
-        """
-        Converts tracks into a numpy array if not already one and performs initialization with validation.
-        """
-        if not isinstance(self.tracks, (list, np.ndarray)):
-            raise TypeError(
-                f"tracks must be a list or numpy array, got {type(self.tracks)}"
-            )
-        self.tracks = np.array(self.tracks)
-        if self.tracks.size == 0:
-            raise ValueError("tracks array cannot be empty.")
-        for t in self.tracks.flatten():
-            if t is not None and not hasattr(t, "plot_plotly"):
-                raise TypeError(
-                    f"Each track must have a 'plot_plotly' method (got {type(t)})."
-                )
-        if not isinstance(self.total_height, (int, float)) or self.total_height <= 0:
-            raise ValueError("total_height must be a positive number.")
-        if not isinstance(self.total_width, (int, float)) or self.total_width <= 0:
-            raise ValueError("total_width must be a positive number.")
-
-    def plot_single_track(
-        self, subplots: go.Figure, track: GenomeTrack, row: int, col: int, **kwargs
-    ) -> np.ndarray | None:
-        """
-        Plots a single track on the given subplot.
-
-        Parameters:
-            subplots (go.Figure): The Plotly figure to plot on.
-            track (GenomeTrack): The track to plot.
-            row (int): The row index of the subplot to plot on.
-            col (int): The column index of the subplot to plot on.
-            **kwargs: Additional arguments to pass to the plot method.
-
-        Returns:
-            np.ndarray | None: The bed region coverage matrix if applicable, otherwise None.
-        """
-
-        if isinstance(track, BedTrack):
-            bed_region_coverage = track.plot_plotly(subplots, row, col, **kwargs)
-        else:
-            track.plot_plotly(subplots, row, col, **kwargs)
-            bed_region_coverage = None
-
-        track.add_hlines_plotly(subplots, row, col)
-        if track.show_yaxis_ticks:
-            subplots.update_yaxes(
-                row=row,
-                col=col,
-                **track.plotly_yaxis_options,
-            )
-
-        return bed_region_coverage
+    tracks: list[GenomeTrack]
 
     def _validate_inputs(
         self,
+        max_rows: int,
+        max_cols: int,
         height_props: list[float],
         row_titles: list[str],
         width_props: list[float],
@@ -99,34 +48,28 @@ class PlotlyPlotter:
         Raises:
             AssertionError: If the lengths of inputs don't match the expected number of rows or columns.
         """
-        num_distinct_rows = sum(
-            [not track.share_with_previous for track in self.tracks[:, 0]]
-        )
-
         assert (
-            len(height_props) == num_distinct_rows
-        ), f"Number of height_props should equal {num_distinct_rows}"
+            len(height_props) == max_rows
+        ), f"Number of height_props should equal {max_rows}"
         assert (
-            len(row_titles) == num_distinct_rows
-        ), f"Number of row_titles should equal {num_distinct_rows}"
+            len(row_titles) == max_rows
+        ), f"Number of row_titles should equal {max_rows}"
         assert (
-            len(width_props) == self.tracks.shape[1]
-        ), f"Number of width_props should equal {self.tracks.shape[1]}"
+            len(width_props) == max_cols
+        ), f"Number of width_props should equal {max_cols}"
         assert (
-            len(column_titles) == self.tracks.shape[1]
-        ), f"Number of column_titles should equal {self.tracks.shape[1]}"
+            len(column_titles) == max_cols
+        ), f"Number of column_titles should equal {max_cols}"
 
     def _initialize_subplots(
         self,
+        max_rows,
+        max_cols,
         height_props: list[float],
         width_props: list[float],
         row_titles: list[str],
         column_titles: list[str],
-        num_distinct_rows: int,
-        vertical_spacing: float = 0.02,
-        horizontal_spacing: float = 0.05,
-        shared_xaxes: str = "columns",
-        shared_yaxes: str = "rows",
+        fig_options: dict | None = None,
     ) -> go.Figure:
         """
         Initializes the Plotly subplots figure with the given layout properties.
@@ -145,179 +88,160 @@ class PlotlyPlotter:
         Returns:
             go.Figure: A Plotly figure with subplots initialized.
         """
+        if fig_options is None:
+            fig_options = {}
         subplots = ps.make_subplots(
-            rows=num_distinct_rows,
-            cols=self.tracks.shape[1],
-            shared_xaxes=shared_xaxes,  # Customizable x-axis sharing # type: ignore
-            shared_yaxes=shared_yaxes,  # Customizable y-axis sharing # type: ignore
+            rows=max_rows,
+            cols=max_cols,
+            shared_xaxes=fig_options.get("shared_xaxes", "columns"),
+            shared_yaxes=fig_options.get("shared_yaxes", "rows"),
             row_heights=height_props,
             row_titles=row_titles,
             column_widths=width_props,
             column_titles=column_titles,
-            vertical_spacing=vertical_spacing,  # Customizable spacing
-            horizontal_spacing=horizontal_spacing,  # Customizable spacing
+            vertical_spacing=fig_options.get("vertical_spacing", 0.02),
+            horizontal_spacing=fig_options.get("horizontal_spacing", 0.05),
         )
         return subplots
 
     def plot_all_tracks(
         self,
-        column_regions: list[str | None] | None = None,
-        total_height: float | None = None,
-        total_width: float | None = None,
-        height_props: list[float] | None = None,
-        row_titles: list[str] | None = None,
-        width_props: list[float] | None = None,
-        column_titles: list[str] | None = None,
-        shared_xaxes: str = "columns",
-        shared_yaxes: str = "rows",
-        margin: dict | None = None,
-        vertical_spacing: float = 0.02,
-        horizontal_spacing: float = 0.05,
-        title_options: dict | None = None,
-        font_options: dict | None = None,
-        layout_options: dict | None = None,
-        show_gridlines: bool = True,
-        plot_bgcolor: str = "white",
-        relative_x_axis: bool = False,
-        show_fig: bool = False,
+        fig_options: dict | None = None,
     ) -> go.Figure:
         """
         Plots all tracks into a single Plotly figure with optional customization.
 
         Args:
-            column_regions (list[str | None] | None): Subset each column to a genomic region in format "chr:start-end".
-            total_height (float | None): The total height of the figure.
-            height_props (list[float] | None): Heights of each row as proportions of the total height.
-            row_titles (list[str] | None): Titles for each row in the figure.
-            width_props (list[float] | None): Widths of each column as a proportion of the total width.
-            column_titles (list[str] | None): Titles for each column in the figure.
-            relative_x_axis (bool): If true, x-axes start at 0bp.
-            show_fig (bool): If true, the figure is displayed.
-            layout_options (dict | None): Additional options to customize Plotly layout (e.g., font, title, colors).
-            margin (dict | None): Custom margins for the plot.
-            vertical_spacing (float): Vertical spacing between subplots.
-            horizontal_spacing (float): Horizontal spacing between subplots.
-            title_options (dict | None): Options for customizing the title of the plot.
-            font_options (dict | None): Font settings for the plot elements.
-            x_axis_title (str | None): Custom title for the x-axis.
-            y_axis_title (str | None): Custom title for the y-axis.
-            show_gridlines (bool): Toggle gridlines on/off.
-            plot_bgcolor (str): Background color for the entire plot.
+
 
         Returns:
             go.Figure: The complete Plotly figure with all tracks.
         """
-        # Ensure the tracks array has 2 dimensions (rows and columns)
-        if self.tracks.ndim == 1:
-            self.tracks = self.tracks.reshape(-1, 1)
+        """
+        Plots all tracks in a single matplotlib figure.
+        """
+        if fig_options is None:
+            fig_options = {}
 
-        # Default to no region subsetting for columns
-        if column_regions is None:
-            column_regions = [None] * self.tracks.shape[1]  # type: ignore
-        assert column_regions is not None
-
-        # Determine number of distinct rows (tracks that don't share axes with the previous row)
-        num_distinct_rows = sum(
-            not track.share_with_previous for track in self.tracks[:, 0]
+        max_rows = max(track.subplot_y for track in self.tracks) + 1
+        max_cols = max(track.subplot_x for track in self.tracks) + 1
+        column_regions = fig_options.get(
+            "column_regions", [None for _ in range(max_cols)]
         )
 
-        # Set default properties for layout if not provided
-        height_props = height_props or TrackUtils.get_height_props(self.tracks)
-        row_titles = row_titles or [""] * num_distinct_rows
-        width_props = width_props or [
-            1 / self.tracks.shape[1] for _ in range(self.tracks.shape[1])
+        if (
+            not isinstance(column_regions, (list, tuple))
+            or len(column_regions) != max_cols
+        ):
+            raise ValueError(
+                "column_regions must be a list/tuple with length equal to number of columns in tracks."
+            )
+
+        height_props = fig_options.get("height_props", [1 for _ in range(max_rows)])
+        row_titles = fig_options.get("row_titles", ["" for _ in range(max_rows)])
+        width_props = fig_options.get("width_props", [1 for _ in range(max_cols)])
+        column_titles = fig_options.get("column_titles", ["" for _ in range(max_cols)])
+        total_height = fig_options.get("total_height", None)
+        total_width = fig_options.get("total_width", None)
+        plot_title = fig_options.get("plot_title", None)
+        relative_x_axis = fig_options.get("relative_x_axis", False)
+
+        self._validate_inputs(
+            max_rows, max_cols, height_props, row_titles, width_props, column_titles
+        )
+        column_limits = []
+        for column in range(max_cols):
+            col_tracks = [
+                track
+                for track in self.tracks
+                if track is not None and track.subplot_x == column
+            ]
+            chromosome, xmin, xmax, max_bed_regions, axis_shift = (
+                TrackUtils.get_column_limits(
+                    col_tracks, column_regions[column], relative_x_axis
+                )
+            )
+            column_limits.append(
+                {
+                    "chromosome": chromosome,
+                    "xmin": xmin,
+                    "xmax": xmax,
+                    "max_bed_regions": max_bed_regions,
+                    "axis_shift": axis_shift,
+                }
+            )
+        bed_region_coverages = [
+            sp.csr_matrix((1, column["xmax"] - column["xmin"]))
+            for column in column_limits
         ]
-        column_titles = column_titles or ["" for _ in range(self.tracks.shape[1])]
-        total_height = total_height or self.total_height
-        total_width = total_width or self.total_width
-
-        # Validations
-        self._validate_inputs(height_props, row_titles, width_props, column_titles)
-
         # Initialize the subplots figure with custom spacings and shared axes settings
         subplots = self._initialize_subplots(
+            max_rows,
+            max_cols,
             height_props,
             width_props,
             row_titles,
             column_titles,
-            num_distinct_rows,
-            vertical_spacing=vertical_spacing,
-            horizontal_spacing=horizontal_spacing,
-            shared_xaxes=shared_xaxes,
-            shared_yaxes=shared_yaxes,
+            fig_options=fig_options,
         )
-
-        # Set the plot title if provided
-        if title_options:
-            subplots.update_layout(**title_options)
 
         # Set layout properties for the entire figure
         subplots.update_layout(
             autosize=True,
             height=total_height,
             width=total_width,
-            plot_bgcolor=plot_bgcolor,
-            margin=margin or dict(l=0.1, r=0.1, t=50, b=20, pad=4),
-            **(layout_options or {}),  # Allow additional layout options
+            plot_bgcolor=fig_options.get("plot_bgcolor", "white"),
+            margin=fig_options.get("margin", dict(l=0.1, r=0.1, t=50, b=20, pad=4)),
+            title=plot_title,
         )
 
         # Plot each track
-        for col_idx in range(self.tracks.shape[1]):
-            xmin, xmax, extra_options = TrackUtils.get_col_limits(
-                self.tracks[:, col_idx], column_regions[col_idx], relative_x_axis
-            )
-            bed_region_coverage = sp.csr_matrix((1, xmax - xmin))
-
-            plot_row = 1  # Row counter
-            for row_idx in range(self.tracks.shape[0]):
-                track = self.tracks[row_idx, col_idx]
-
-                if track is None:
-                    continue
-
-                if track.share_with_previous:
-                    plot_row -= 1
-                else:
-                    bed_region_coverage = sp.csr_matrix((1, xmax - xmin))
-
-                # Handle BedTrack separately for bed region coverage
+        for track in self.tracks:
+            if track is None:
+                continue
+            if not hasattr(track, "plot_plotly"):
+                raise TypeError(f"Track {track} does not have a 'plot_plotly' method.")
+            try:
                 if isinstance(track, BedTrack):
-                    extra_options["bed_region_coverage"] = bed_region_coverage
-                    bed_region_coverage = self.plot_single_track(
+                    bed_region_coverages[track.subplot_x] = track.plot_plotly(
                         subplots,
-                        track,
-                        plot_row,
-                        col_idx + 1,
-                        region=column_regions[col_idx],
-                        **extra_options,
+                        track.subplot_y + 1,
+                        track.subplot_x + 1,
+                        bed_region_coverages[track.subplot_x],
+                        subset_region=column_regions[track.subplot_x],
+                        xmin=column_limits[track.subplot_x]["xmin"],
+                    )
+                elif isinstance(track, XAxisTrack):
+                    track.plot_plotly(
+                        subplots,
+                        track.subplot_y + 1,
+                        track.subplot_x + 1,
+                        chromosome=column_limits[track.subplot_x]["chromosome"],
                     )
                 else:
-                    self.plot_single_track(
+                    track.plot_plotly(
                         subplots,
-                        track,
-                        plot_row,
-                        col_idx + 1,
-                        region=column_regions[col_idx],
-                        **extra_options,
+                        track.subplot_y + 1,
+                        track.subplot_x + 1,
+                        subset_region=column_regions[track.subplot_x],
                     )
-
-                # Update the x-axes
+                track.add_hlines_plotly(
+                    subplots, track.subplot_y + 1, track.subplot_x + 1
+                )
                 subplots.update_xaxes(
                     range=[xmin, xmax],
-                    row=plot_row,
-                    col=col_idx + 1,
-                    showgrid=show_gridlines,  # Toggle gridlines
+                    row=track.subplot_y + 1,
+                    col=track.subplot_x + 1,
                 )
-                plot_row += 1
+                subplots.update_yaxes(
+                    row=track.subplot_y + 1,
+                    col=track.subplot_x + 1,
+                    **track.track_options.get("yaxis", {}),
+                )
 
-        # Final layout updates for fonts and axis titles
-        if font_options:
-            subplots.update_layout(**font_options)
-            # subplots.update_annotations(**plotly_font_options)
-            # subplots.update_xaxes(**plotly_font_options)
-
-        # Optionally show the figure
-        if show_fig:
-            subplots.show()
+            except Exception as e:
+                raise RuntimeError(
+                    f"Error plotting track at grid ({track.subplot_y},{track.subplot_x}): {e}"
+                )
 
         return subplots
