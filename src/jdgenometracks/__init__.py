@@ -22,7 +22,9 @@ fig = plotter.plot()  # or plotter.plot_single_track(...)
 See the README or demo notebooks for more details.
 """
 
-__version__ = "0.2.1"
+from .config import VERSION
+
+__version__ = VERSION
 __author__ = "Justin Delano"
 
 # High-level convenience function for quick plotting

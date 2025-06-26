@@ -6,6 +6,7 @@ import pandas as pd
 from matplotlib import axis
 from matplotlib.pyplot import subplot
 
+from .config import ErrorMessages, FileDefaults, PlotDefaults, TrackDefaults
 from .tracks.BedGraphTrack import BedGraphTrack
 from .tracks.BedTrack import BedTrack
 from .tracks.GenomeTrack import GenomeTrack
@@ -47,34 +48,32 @@ class TrackFactory:
         # Handle special track types (axis, spacer) without file_path
         if track_type == "axis":
             track_name = kwargs.pop(
-                "track_name", "Axis"
+                "track_name", FileDefaults.DEFAULT_AXIS_TRACK_NAME
             )  # Use pop to remove it from kwargs
             return XAxisTrack(
-                "Axis",
-                "Axis",
-                track_name,
-                pd.DataFrame(),
+                data=pd.DataFrame(),
+                file_path="Axis",
+                track_name=track_name,
+                track_type="Axis",
                 track_options=track_options,
                 **kwargs,
             )
         elif track_type == "spacer":
             track_name = kwargs.pop(
-                "track_name", "Spacer"
+                "track_name", FileDefaults.DEFAULT_SPACER_TRACK_NAME
             )  # Use pop to remove it from kwargs
             return SpacerTrack(
-                "Spacer",
-                "Spacer",
-                track_name,
-                pd.DataFrame(),
+                data=pd.DataFrame(),
+                file_path="Spacer",
+                track_name=track_name,
+                track_type="Spacer",
                 track_options=track_options,
                 **kwargs,
             )
 
         # For other track types, file_path is required
         if file_path is None:
-            raise ValueError(
-                "file_path is required for track types other than 'axis' or 'spacer'"
-            )
+            raise ValueError(ErrorMessages.MISSING_FILE_PATH)
 
         # Infer track type and track name if not provided explicitly
         track_type = track_type or TrackFactory._infer_track_type(file_path)
@@ -327,7 +326,7 @@ class TrackUtils:
                 if row[0] is not None
                 and hasattr(row[0], "height_prop")
                 and row[0].height_prop is not None
-                else 1
+                else PlotDefaults.DEFAULT_HEIGHT_PROP
             )
             for row in tracks
             if not (
@@ -351,7 +350,7 @@ class TrackUtils:
         Returns:
             tuple[int, int, int]: The minimum x-axis value, maximum x-axis value, and maximum number of BED regions.
         """
-        max_bed_regions = 0
+        max_bed_regions = PlotDefaults.DEFAULT_MAX_BED_REGIONS
         xmin = xmax = None
         for track in column_tracks:
             if not hasattr(track, "data") or track.data is None or track.data.empty:
@@ -369,7 +368,7 @@ class TrackUtils:
             )
             if isinstance(track, BedTrack):
                 max_bed_regions = max(max_bed_regions, formatted_data.shape[0])
-        assert xmin is not None and xmax is not None, "No data available to plot."
+        assert xmin is not None and xmax is not None, ErrorMessages.NO_DATA_TO_PLOT
         return xmin, xmax, max_bed_regions
 
     @staticmethod
@@ -399,8 +398,11 @@ class TrackUtils:
             )
         )
         xmin, xmax, max_bed_regions = TrackUtils.get_xlim_bedlim(column_tracks, region)
-        axis_shift = 0
+        axis_shift = PlotDefaults.DEFAULT_AXIS_SHIFT
         if relative_x_axis:
-            axis_shift = xmin - 1
-            xmax, xmin = xmax - xmin + 1, 0
+            axis_shift = xmin - PlotDefaults.RELATIVE_X_AXIS_OFFSET
+            xmax, xmin = (
+                xmax - xmin + PlotDefaults.RELATIVE_X_AXIS_OFFSET,
+                PlotDefaults.RELATIVE_X_AXIS_START,
+            )
         return chromosome, xmin, xmax, max_bed_regions, axis_shift

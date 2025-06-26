@@ -8,6 +8,8 @@ import pandas as pd
 import plotly.graph_objects as go
 from matplotlib.axes import Axes
 
+from jdgenometracks.config import ErrorMessages, FileDefaults, TrackDefaults
+
 from .GenomeTrack import GenomeTrack
 
 # Define common types for scalar values and array-like structures
@@ -44,9 +46,15 @@ class BedGraphTrack(GenomeTrack):
 
     def __post_init__(self):
         super().__post_init__()
-        if self.track_options.get("plot.type") not in PLOT_TYPES:
+        if (
+            self.track_options.get("plot.type")
+            not in TrackDefaults.SUPPORTED_PLOT_TYPES
+        ):
             raise ValueError(
-                f"Invalid plot.type: {self.track_options.get('plot.type')}. Must be one of {list(PLOT_TYPES.keys())}."
+                ErrorMessages.INVALID_PLOT_TYPE.format(
+                    plot_type=self.track_options.get("plot.type"),
+                    supported_types=TrackDefaults.SUPPORTED_PLOT_TYPES,
+                )
             )
         if self.data is None:
             self.read_data()
@@ -61,14 +69,11 @@ class BedGraphTrack(GenomeTrack):
         try:
             data = pd.read_csv(self.file_path, sep="\t", header=None)
         except pd.errors.EmptyDataError:
-            data = pd.DataFrame(
-                columns=["chrom", "chromStart", "chromEnd", "value", "name"]
-            )
+            data = pd.DataFrame(columns=FileDefaults.BEDGRAPH_COLUMNS)
 
         # Ensure the dataframe contains valid columns
-        possible_bedgraph_columns = ["chrom", "chromStart", "chromEnd", "value", "name"]
-        data = data.iloc[:, : len(possible_bedgraph_columns)]
-        data.columns = possible_bedgraph_columns[: len(data.columns)]
+        data = data.iloc[:, : len(FileDefaults.BEDGRAPH_COLUMNS)]
+        data.columns = FileDefaults.BEDGRAPH_COLUMNS[: len(data.columns)]
         self.data = self.set_df_col_dtype(data)
 
     def get_cleaned_data(
