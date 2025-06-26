@@ -4,11 +4,9 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
-from jdgenometracks.tracks import XAxisTrack
+from jdgenometracks.tracks import BedTrack, GenomeTrack, XAxisTrack
 
 from .config import PlotDefaults, get_default_column_regions
-from .tracks.BedTrack import BedTrack
-from .tracks.GenomeTrack import GenomeTrack
 from .utils import TrackUtils
 
 
