@@ -18,8 +18,8 @@ import pandas as pd
 import plotly.graph_objects as go
 from matplotlib.axes import Axes
 
-from jdgenometracks.jdg_V3.tracks.base_track import BaseTrack
-from jdgenometracks.jdg_V3.utils.options import translate
+from jdgenometracks.tracks.base_track import BaseTrack
+from jdgenometracks.utils.options import translate
 
 
 @dataclass
